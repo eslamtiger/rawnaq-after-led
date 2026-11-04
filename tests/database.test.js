@@ -6,7 +6,7 @@ const ADMIN = "00000000-0000-4000-a000-000000000001",
   REP = "00000000-0000-4000-a000-000000000002",
   OTHER = "00000000-0000-4000-a000-000000000003",
   OUTSIDER = "00000000-0000-4000-a000-000000000004";
-test("PostgreSQL core workflow, RLS, validation, concurrency and audit", async (t) => {
+test("V0.1 migration regression (historical schema only)", async (t) => {
   const pg = new PGlite();
   await pg.exec(
     `create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key);create function auth.uid()returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema public,auth to authenticated,anon;grant execute on function auth.uid()to authenticated,anon;`,

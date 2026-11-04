@@ -67,6 +67,7 @@ test("Arabic interface: navigation, empty data, profile and validated save forms
     Error,
     ...domain,
     configured: true,
+    qaAnonymous: false,
     db: {
       auth: {
         onAuthStateChange(cb) {
@@ -82,7 +83,8 @@ test("Arabic interface: navigation, empty data, profile and validated save forms
           id: "lead_test",
           ...args.p,
           stage: "new",
-          grade: "cold",
+          grade: null,
+          qualification: "unknown",
           revision: 1,
           created_at: new Date().toISOString(),
         });
@@ -128,6 +130,26 @@ test("Arabic interface: navigation, empty data, profile and validated save forms
   assert.equal(calls[0][1].p.contact, "+201012345678");
   assert.ok(w.document.body.textContent.includes("ملف العميلة"));
   assert.ok(w.document.body.textContent.includes("عميلة اختبار"));
+
+  click('[data-act="edit"]');
+  form = w.document.querySelector("#modal-form");
+  assert.deepEqual(
+    [...form.querySelector("#stage").options].map((o) => o.value),
+    ["active", "follow_up", "lost"],
+  );
+  assert.equal(form.querySelector("#qualification").value, "unknown");
+  assert.equal(form.querySelector("#grade").value, "");
+  form.querySelector("#stage").value = "lost";
+  form.querySelector("#stage").dispatchEvent(new w.Event("change"));
+  assert.equal(form.querySelector("#next_at").disabled, true);
+  assert.equal(form.querySelector("#lost_reason_id").required, true);
+  form.querySelector("#stage").value = "follow_up";
+  form.querySelector("#stage").dispatchEvent(new w.Event("change"));
+  assert.equal(form.querySelector("#next_at").required, true);
+  form.querySelector("[data-close]").click();
+  click('[data-act="identity"]');
+  assert.ok(w.document.querySelector("#modal-form #contact"));
+  w.document.querySelector("[data-close]").click();
   click('[data-act="contact"]');
   form = w.document.querySelector("#modal-form");
   assert.ok(form.querySelector('[name="first_reply"]'));

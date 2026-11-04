@@ -62,3 +62,5 @@ export async function loadWorkspace() {
     ]);
   return { leads, appointments, activities, profiles, config, qa };
 }
+
+export const qaAnonymous = import.meta.env.VITE_QA_ANONYMOUS === "true";

@@ -1,0 +1,41 @@
+{
+  "run": "19552c07",
+  "lead_ids": [
+    "e5a70d8d-e67d-4580-83f8-b326534c638f",
+    "767a6f9e-88b0-4584-b1a2-cbd68ad88ace",
+    "0805b2c3-22d0-4259-b72d-09e82f6e8d32",
+    "8a603bfd-5d8b-48f0-aa0f-990784514e20",
+    "2152c4f8-f335-4086-9ba8-74abf8b94482",
+    "e2cc12fd-36b5-4fed-b0de-a889c1aad9b3"
+  ],
+  "passed": [
+    "two independent anonymous identities",
+    "Flow C rejects missing lost reason",
+    "Flow E rejects missing lost reason",
+    "Supabase Flow C",
+    "Supabase Flow E",
+    "Supabase Flow B",
+    "Supabase Flow A",
+    "Supabase Flow D",
+    "Session A/B identical persisted leads",
+    "Session A/B identical persisted activities",
+    "Session A/B identical persisted appointments",
+    "Session B update visible in refreshed Session A",
+    "missing revision rejected",
+    "stale revision rejected",
+    "duplicate corrected contact rejected",
+    "impossible calendar date rejected by PostgreSQL",
+    "future received date rejected",
+    "completed first response cannot remain outstanding",
+    "contact before inquiry rejected",
+    "follow-up missing date rejected",
+    "BOOKED without appointment rejected",
+    "past appointment rejected",
+    "reschedule preserves original and linked history",
+    "structured activities and milestones",
+    "final two-session relational persistence including next actions"
+  ],
+  "failed": [],
+  "mode": "actual Supabase HTTPS / two independent anonymous tokens",
+  "timestamp": "2026-11-04T17:20:58.620552+00:00"
+}

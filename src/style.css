@@ -8,9 +8,9 @@
   color: #242925;
   background: #f5f5f1;
   font-synthesis: none;
-  --gold: #9d7e40;
+  --gold: #806229;
   --gold-soft: #f4eddd;
-  --muted: #7d827c;
+  --muted: #5d625c;
   --line: #e7e8e1;
   --dark: #1b211e;
 }
@@ -173,7 +173,7 @@ svg {
   border: 0;
   color: #aab3aa;
   padding: 13px 14px;
-  font-size: 12px;
+  font-size: 13px;
   gap: 13px;
 }
 .nav-item:hover {
@@ -284,7 +284,7 @@ svg {
 }
 .page-heading p {
   margin-top: 5px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .stats {
   display: grid;
@@ -393,7 +393,7 @@ svg {
   flex-wrap: wrap;
 }
 .lead-main strong {
-  font-size: 12px;
+  font-size: 13px;
 }
 .lead-main small {
   display: block;
@@ -505,7 +505,7 @@ svg {
   justify-content: flex-start;
 }
 .appointment-item .time {
-  font-size: 12px;
+  font-size: 13px;
   color: #927843;
   border-inline-end: 1px solid #eee9dc;
   padding-inline-end: 14px;
@@ -546,7 +546,7 @@ svg {
   margin-bottom: 10px;
 }
 .tip p {
-  font-size: 12px;
+  font-size: 13px;
   color: #8a8b74;
   margin-bottom: 20px;
 }
@@ -590,7 +590,7 @@ textarea {
   background: #fff;
   border-radius: 7px;
   padding: 10px 12px;
-  font-size: 12px;
+  font-size: 13px;
   color: #4a5346;
   min-height: 43px;
   width: 100%;
@@ -685,7 +685,7 @@ textarea::placeholder {
   margin-top: 20px;
 }
 .profile-info dd {
-  font-size: 12px;
+  font-size: 13px;
   margin: 7px 0 0;
   overflow-wrap: anywhere;
   line-height: 1.8;
@@ -701,7 +701,7 @@ textarea::placeholder {
   gap: 10px;
 }
 .booking-card strong {
-  font-size: 12px;
+  font-size: 13px;
 }
 .booking-card p {
   font-size: 13px;
@@ -743,7 +743,7 @@ textarea::placeholder {
   top: 5px;
 }
 .timeline strong {
-  font-size: 12px;
+  font-size: 13px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -846,7 +846,7 @@ progress::-moz-progress-bar {
   color: #7c8771;
 }
 .reason strong {
-  font-size: 12px;
+  font-size: 13px;
   color: #9b8a5c;
 }
 .panel-note,
@@ -861,7 +861,7 @@ progress::-moz-progress-bar {
   border-radius: 8px;
   background: #f7f3e9;
   margin-bottom: 20px;
-  font-size: 12px;
+  font-size: 13px;
   color: #8c7b56;
   line-height: 1.9;
 }
@@ -896,11 +896,11 @@ progress::-moz-progress-bar {
   color: #a48f62;
 }
 .script h3 {
-  font-size: 12px;
+  font-size: 13px;
 }
 .script p {
   margin: 20px 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 2.2;
   white-space: pre-wrap;
 }
@@ -995,12 +995,12 @@ textarea {
 }
 .form-error {
   color: #b37056;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.8;
   margin: 0 25px 14px;
 }
 .checkbox {
-  font-size: 12px;
+  font-size: 13px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1068,7 +1068,7 @@ textarea {
   margin-bottom: 10px;
 }
 .auth-box > p {
-  font-size: 12px;
+  font-size: 13px;
   margin-bottom: 32px;
 }
 .auth-box form {
@@ -1076,7 +1076,7 @@ textarea {
   gap: 20px;
 }
 .auth-box .field > span {
-  font-size: 12px;
+  font-size: 13px;
 }
 .auth-box input {
   height: 48px;
@@ -1112,7 +1112,7 @@ textarea {
   padding: 14px 24px;
   z-index: 1000;
   max-width: 90vw;
-  font-size: 12px;
+  font-size: 13px;
   opacity: 0;
   pointer-events: none;
   transition: 0.2s;
@@ -1480,7 +1480,7 @@ textarea {
     gap: 14px;
   }
   .script p {
-    font-size: 12px;
+    font-size: 13px;
   }
   .script button {
     font-size: 13px;
@@ -1557,7 +1557,7 @@ textarea {
     margin-top: 23px;
   }
   .auth-box .notice {
-    font-size: 12px;
+    font-size: 13px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1565,4 +1565,48 @@ textarea {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+[hidden] {
+  display: none !important;
+}
+.timeline small {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #514b40;
+}
+/* V0.2: readable operational detail and status text on existing light surfaces. */
+.lead-main small,
+.next small,
+.count,
+.list-caption,
+.panel-note,
+.footnote,
+.profile-info dt,
+.timeline p,
+.booking-card p,
+.page-heading p,
+.connection,
+.stat small {
+  color: #58624f;
+}
+.badge {
+  color: #4e623c;
+}
+.badge.red {
+  color: #8b4938;
+}
+.badge.gold {
+  color: #74551c;
+}
+.badge.green {
+  color: #356b43;
+}
+.next.late strong,
+.next.late small {
+  color: #9b4c36;
+}
+.text-button {
+  color: #715b2c;
 }

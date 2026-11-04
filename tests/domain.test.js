@@ -11,6 +11,11 @@ import {
   queue,
   priority,
   safeCSV,
+  followupBucket,
+  appointmentMatches,
+  STAGES,
+  QUALIFICATIONS,
+  GRADES,
 } from "../src/domain.js";
 test("Egyptian numbers normalize and duplicate safely", () => {
   assert.equal(normalizeContact("٠١٠ ١٢٣٤ ٥٦٧٨"), "+201012345678");
@@ -86,10 +91,81 @@ test("Export escapes spreadsheet formula injection", () => {
   assert.ok(csv.includes("'+20101"));
 });
 
-test('Reject impossible calendar values and classify same-day overdue', () => {
-  for (const v of ['2027-02-30T12:00', '2027-04-31T12:00', '2027-13-01T12:00', '2027-01-01T25:00']) assert.throws(() => cairoISO(v));
-  assert.ok(cairoISO('2028-02-29T12:00'));
-  const now = Date.parse('2026-11-04T08:00:00Z');
-  const lead = {stage:'contacted', first_response_at:'2026-11-04T06:00:00Z', next_at:'2026-11-04T07:00:00Z'};
-  assert.equal(priority(lead,now),1);
+test("Reject impossible calendar values and classify same-day overdue", () => {
+  for (const v of [
+    "2027-02-30T12:00",
+    "2027-04-31T12:00",
+    "2027-13-01T12:00",
+    "2027-01-01T25:00",
+  ])
+    assert.throws(() => cairoISO(v));
+  assert.ok(cairoISO("2028-02-29T12:00"));
+  const now = Date.parse("2026-11-04T08:00:00Z");
+  const lead = {
+    stage: "contacted",
+    first_response_at: "2026-11-04T06:00:00Z",
+    next_at: "2026-11-04T07:00:00Z",
+  };
+  assert.equal(priority(lead, now), 1);
+});
+
+test("V02 independent concepts, timestamp queues and appointment buckets", () => {
+  assert.deepEqual(Object.keys(STAGES), [
+    "new",
+    "active",
+    "follow_up",
+    "booked",
+    "no_show",
+    "attended",
+    "lost",
+  ]);
+  assert.deepEqual(Object.keys(QUALIFICATIONS), [
+    "unknown",
+    "qualified",
+    "not_qualified",
+  ]);
+  assert.deepEqual(Object.keys(GRADES), ["hot", "warm", "cold"]);
+  const now = Date.parse("2026-11-04T08:00Z");
+  assert.equal(
+    followupBucket({ stage: "follow_up", next_at: "2026-11-04T07:00Z" }, now),
+    "overdue",
+  );
+  assert.equal(
+    followupBucket({ stage: "follow_up", next_at: "2026-11-04T09:00Z" }, now),
+    "today",
+  );
+  assert.equal(
+    followupBucket({ stage: "follow_up", next_at: "2026-11-05T07:00Z" }, now),
+    "upcoming",
+  );
+  assert.equal(
+    followupBucket({ stage: "lost", next_at: "2026-11-04T07:00Z" }, now),
+    null,
+  );
+  assert.ok(
+    appointmentMatches(
+      { starts_at: "2026-11-05T07:00Z", status: "scheduled" },
+      "upcoming",
+      now,
+    ),
+  );
+  assert.ok(
+    !appointmentMatches(
+      { starts_at: "2026-11-05T07:00Z", status: "rescheduled" },
+      "upcoming",
+      now,
+    ),
+  );
+  const m = metrics(
+    [{ id: "a", first_booked_at: "2026-11-01T12:00Z" }],
+    [
+      { lead_id: "a", status: "attended" },
+      { lead_id: "a", status: "attended" },
+      { lead_id: "a", status: "no_show" },
+    ],
+    now,
+  );
+  assert.equal(m.attended, 1);
+  assert.equal(m.booked, 1);
+  assert.equal(m.noShow, 1);
 });

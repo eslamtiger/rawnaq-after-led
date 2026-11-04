@@ -1,76 +1,51 @@
-# RAWNAQ After-Lead Sales System V0.1
+# RAWNAQ After-Lead Sales — V0.2 Core Pilot
 
-تطبيق عربي RTL لفريق رونق. المصدر: `RAWNAQ_After_Lead_Sales_System_Source.xlsx`، تمت قراءة صفحاته العشر بتاريخ ٤ نوفمبر ٢٠٢٦. الملف مصدر متطلبات، وليس بيانات تشغيل أو واجهة يتم تقليدها.
+Incremental correction of the existing RAWNAQ application. Branch: `fix/rawnaq-v0-2-core-pilot`. No replacement product or browser CRM adapter.
 
-## الحالة الفعلية
+The operational source of truth is Supabase project `uucdnakounzqeqwkzfel`. Leads, next actions, activities, appointments, QA and configuration are fetched from PostgreSQL. RLS remains enabled; direct client writes are revoked. Only explicitly enrolled RAWNAQ team members share the workspace. Anonymous QA identities require expiring enrollment; anonymous sign-in alone has no data access.
 
-الكود ومنطق قاعدة البيانات جاهزان للاختبار والنشر. هذه الحزمة **ليست إثباتًا لتشغيل إنتاجي**. يلزم تطبيق الترحيل على مشروع Supabase مصرح، إنشاء حسابات الفريق، إدخال إعدادات الاتصال، ثم نشر Vercel واختبار الدخول والحفظ على النسخة الحية. لا يحتوي التطبيق على دخول تجريبي أو بيانات عميلات مصطنعة أو حفظ محلي بديل.
+**Synthetic QA data only. Production Auth/authorization require a separate QA round before real customer data.**
 
-## الوظائف
+## Run and build
 
-- إضافة عميلة ومنع تكرار رقمها بعد توحيد الأرقام المصرية والعربية.
-- مسؤولية واضحة وموعد وخطوة قادمة لكل ملف مفتوح.
-- اليوم والمتابعات، البحث، التصفية، وترقيم صفحات العميلات.
-- تسجيل أول رد فعلي ونتيجة التواصل دون الخلط بينهما وبين حالة العميلة.
-- تأهيل تشغيلي، عرض الحجز، الحجز، التأكيد، الحضور، الغياب، الإلغاء وإعادة الحجز.
-- تاريخ نشاط دائم، وعدّ المتابعات المسجلة فقط.
-- لوحة متابعة حسب تاريخ وصول الاستفسار والمصدر والموظفة الحالية.
-- قوالب التواصل والاعتراضات، مراجعات الجودة، إدارة القوائم والفريق.
-- صلاحيات الإدارة وموظفة المبيعات. الموظفة ترى ملفاتها فقط. الإدارة ترى الكل.
-- حماية على مستوى PostgreSQL: RLS، دوال حفظ ذرية، مراجعة إصدار لمنع الكتابة فوق تعديل زميلة، وعدم منح الكتابة المباشرة للجداول.
-- واجهة عربية بالكامل، RTL، وتوقيت القاهرة مع التوقيت الصيفي. الأرقام ومعرفات التواصل معزولة عند الحاجة.
+Node 22.12+ (Preview uses Node 24), pinned dependencies and lockfile:
 
-## تشغيل محلي
-
-```bash
+```sh
 npm ci
-cp .env.example .env.local
-# املأ إعدادات الاتصال العامة فقط في .env.local
-npm run dev
-```
-
-إعدادا Vite المطلوبان: `VITE_SUPABASE_URL` و`VITE_SUPABASE_PUBLISHABLE_KEY`. كلاهما إعداد عام مخصص للمتصفح. لا تستخدم مفتاح `service_role` أو مفتاحًا سريًا في الواجهة.
-
-## إعداد Supabase
-
-١. اختر مشروعًا مخصصًا لرونق وتأكد من صلاحية تطبيق ترحيل جديد عليه.
-٢. طبّق ملفات `supabase/migrations/` بترتيب أسمائها، ثم `supabase/seed.sql`. المشروع الحي الحالي مطبق بالفعل؛ لا تعِد تشغيل الترحيل الأول عليه.
-٣. عطّل إنشاء الحسابات العام من إعدادات Auth. لا توفر الواجهة تسجيل حساب ذاتيًا.
-٤. أنشئ أول حساب إدارة من Supabase Auth. لا توجد كلمة مرور افتراضية أو حساب افتراضي.
-٥. أضف صلاحية أول مسؤول من SQL Editor باستخدام معرف الحساب الفعلي واسمه المعتمد:
-
-```sql
-insert into public.profiles(id, display_name, role)
-values ('ACTUAL_AUTH_USER_UUID', 'ACTUAL_APPROVED_NAME', 'admin');
-```
-
-٦. أنشئ حسابات الموظفات في Auth. أضف معرفات الحسابات وأسماءها من شاشة الإعدادات داخل التطبيق. لا ترسل هذه الشاشة دعوات تلقائية.
-٧. أضف عنوان Vercel النهائي في إعدادات Auth المناسبة وسياسة إعادة التوجيه قبل استخدام استعادة الحساب أو أي دعوة خارجية.
-٨. اختبر دخول الإدارة والموظفة بحسابين مختلفين. تحقق أن الموظفة لا تستطيع قراءة ملفات الأخرى أو الحفظ مباشرة في الجداول.
-
-## نشر Vercel
-
-اربط المستودع الفعلي بالمشروع، ثم أضف إعدادي الاتصال السابقين إلى Production وPreview في Vercel. أمر البناء `npm run build` ومجلد الناتج `dist`. أعد النشر بعد أي تعديل على إعدادات Vite لأنها تُدمج وقت البناء.
-
-## التحقق
-
-```bash
 npm run check
 npm test
 npm run build
+npm run dev
 ```
 
-اختبارات PostgreSQL تستخدم PGlite لتطبيق الترحيل والبذور فعليًا، مع بيئة Auth معزولة للاختبار فقط. تغطي الصلاحيات، رحلة الحجز، التكرار، تعارض التعديل، الفقد وإعادة الفتح، وسجل النشاط. لا تُعد بديلًا لاختبار Supabase Auth وخدمة البيانات على مشروع حي.
+Copy `.env.example` to an untracked local environment file and configure the Supabase URL and publishable key. Never use a service-role key in the client. Production QA-anonymous flag defaults false. Preview may set `VITE_QA_ANONYMOUS=true`, but membership must still be provisioned explicitly with an expiry. Permanent accounts use the existing Supabase password login and profiles/RLS model.
 
-## حدود النسخة
+Apply the committed SQL migrations in order, then seed configuration once from `supabase/seed.sql`. The original source migration `202611040001_initial.sql` corresponds to the server history entry `20261104001445 rawnaq_initial`; preserve that historical mapping when baselining an existing project. Do not rerun initial schema creation against the live database.
 
-- إدخال الاستفسارات والتواصل يدوي؛ لا تكامل آلي مع Meta أو WhatsApp ولا رسائل ترسل تلقائيًا.
-- لا مزامنة مع جدول الطبيبات أو سعة الغرف؛ يجب مراجعة الإتاحة قبل الحجز.
-- ساعات العمل والأسعار والعنوان والسياسات النهائية وأسماء الموظفات غير متاحة في المصدر. لا توجد أسعار أو وعود طبية أو أسماء مختلقة.
-- زمن أول رد هو زمن فعلي شامل خارج العمل؛ لم يُطبق SLA داخل ساعات العمل لعدم اعتماد الجدول.
-- البيانات التشغيلية تُحفظ في Supabase فقط؛ جلسة الدخول في Session Storage وتُزال عند الخروج. تسجيل الخروج مطلوب على الأجهزة المشتركة.
-- لا توجد مرفقات أو دفع أو وصفات أو تشخيصات. القوالب لا تستبدل التقييم الطبي.
-- قوائم العميلات مقسمة إلى صفحات، لكن تحميل بيانات مساحة العمل يتم على دفعات ثم تحليلها بالمتصفح. مناسب لإطلاق MVP محدود؛ يلزم نقل التجميع والتصفية إلى الخادم قبل التوسع الكبير.
-- أسماء الفريق ظاهرة لأعضاء الفريق لأغراض الإسناد. ملفات العميلات محمية حسب الموظفة.
-- لا توجد شاشة استعادة كلمة مرور في هذه النسخة؛ إدارة الحسابات من مسؤول Auth.
-- اختبارات الهاتف المرئية الكاملة واختبار النسخة المنشورة مرتبطان بتوفر الربط الحي.
+## Pilot behavior
+
+- Lifecycle: NEW, ACTIVE, FOLLOW_UP, BOOKED, NO_SHOW, ATTENDED, LOST.
+- Independent qualification: UNKNOWN, QUALIFIED, NOT_QUALIFIED.
+- Independent temperature: HOT, WARM, COLD; nullable until assessed.
+- Booking Offered is an independent timestamp/event.
+- Rebooking and rescheduling preserve old appointments, original notes, distinct outcome notes and linked history.
+- Progressive forms require only relevant fields. Atomic RPCs reject invalid dates/states, duplicates and missing/stale revisions.
+- Cairo operational queues and appointment views; actual Supabase dashboard counts unique leads for conversion metrics.
+- Lead identity/acquisition corrections retain audit history. Admin full JSON backup retains relational IDs; management CSV is separate.
+- Network/database failure displays a retry/error state and never creates an empty local workspace.
+
+See [V02_CONTRACT.md](docs/V02_CONTRACT.md) for exact validation, metric and security semantics. Database/API codes retain the repository's lowercase convention.
+
+## Verification
+
+`npm test` includes historical V0.1 migration regression, V0.2 full migration-chain/database workflows, strict dates, counts, queue boundaries and DOM/form tests. These isolated tests supplement, and do not replace, actual Supabase acceptance.
+
+Actual acceptance scripts:
+
+- `tests/supabase-live.py`: A–E workflows, two independent anonymous sessions, shared relational reads, cross-session edits, history/notes, invalid operations.
+- `tests/supabase-access.py`: unprovisioned anonymous, unauthenticated and direct-write rejection.
+- `tests/supabase-snapshot.py` then `node tests/live-metrics.mjs`: actual-data dashboard cohort and JSON relationships.
+
+Session JSON files and key-file inputs are local test credentials, never committed. The live workflow script supports session/key path environment overrides. Live tests create visibly synthetic QA records. Test reports under `docs/v02-*-results.json` record actual results, without tokens.
+
+Deploy only a new Preview after acceptance. Do not promote or replace the existing QA deployment before review. Use the recorded commit and pinned source/lockfile, with configuration in environment variables. The final deployment report identifies any Git-integration fallback and the exact deployed source commit.

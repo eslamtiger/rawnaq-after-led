@@ -1,15 +1,15 @@
-# متابعة التنفيذ — ٤ نوفمبر ٢٠٢٦
+# RAWNAQ V0.2 checkpoint — 2026-11-04
 
-- المستودع الخاص: https://github.com/eslamtiger/rawnaq-after-led، الكود مرفوع وصلاحية الكتابة مؤكدة.
-- تم اختيار مؤسسة eslam وإنشاء مشروع Supabase فعلي: uucdnakounzqeqwkzfel.
-- الجداول الستة مع RLS وإعدادات رونق (٤٣ سجل إعداد، دون عميلات أو موظفات) مطبقة.
-- تاريخ الترحيل الحي: 20261104001445 rawnaq_initial يطابق ملف المصدر 202611040001_initial.sql؛ ثم ترحيلا الصلاحيات والفهارس.
-- نجح tests/live_workflow.sql على PostgreSQL الحي، وتم التراجع عن كل سجلات الاختبار. هذا يختبر صلاحيات قاعدة البيانات والعمليات، ولا يختبر خدمة Supabase Auth أو تسجيل الدخول.
-- مفاتيح الاتصال العامة متاحة عبر أداة Supabase؛ لا مفاتيح إدارية في المصدر.
-- تحذيرات المستشار الأمنية الباقية تخص RPC مقصودة للمستخدمين المسجلين، وتتحقق داخليًا من العضوية والملكية أو صلاحية الإدارة. الدالتان الداخليتان غير قابلتين للاستدعاء بواسطة authenticated. لا صلاحية كتابة مباشرة على الجداول.
-- تصريح فريق Vercel أصبح متاحًا. المشروع prj_ux2P13P3HPvPOu4L7v9knyxz92fQ والنشر dpl_8g2i5HJniSrXxj2aDAXuGRkjHZvb بحالة READY، Production: https://rawnaq-after-lead-sales.vercel.app. البناء npm ci ثم npm run build نجح.
-- تعذّر ربط المستودع الخاص من Vercel (repo_not_found)، لذا تم النشر المباشر من نفس ملفات commit 390f2a79399f1f0ec7aed7bda2429e0b37c00084. الربط التلقائي مع GitHub لم يكتمل.
-- حماية Vercel الافتراضية ما زالت all_except_custom_domains. أداة جلب الصفحة أعادت تعذر الوصول/العثور على النشر رغم نجاح الاستعلامات الصريحة بالفريق؛ لا تعتبر هذا اختبار واجهة.
-- مطلوب البريد والاسم المعتمدان لأول حساب إدارة. لم يُنشأ أي حساب دائم. أدوات Supabase الحالية لا توفر إدارة مستخدمي Auth أو تعديل إعداداته؛ يلزم مسار مدعوم لإعداد أول مستخدم وتعطيل التسجيل العام وتحديد عناوين إعادة التوجيه.
-- بعد النشر اختبر تسجيل الدخول والحفظ عبر HTTP والواجهة على الهاتف، ثم حَدّث الحالة. لا تدّعِ اكتمال MVP قبل ذلك.
-- الفحص المحلي الأخير: syntax و٦ اختبارات domain ناجحة. تعذر تثبيت الاعتماديات من الذاكرة المحلية، لذا نتائج الـ١٥ اختبارًا والبناء في الحزمة السابقة ليست إعادة اختبار لهذه الجلسة.
+Continue the existing branch `fix/rawnaq-v0-2-core-pilot`; do not rebuild or switch to browser-local storage.
+
+Implemented source: independent lifecycle/qualification/temperature; booking-offered milestone; NO_SHOW and recovery; Supabase persistence; strict Cairo dates and concurrency; structured activity timeline; preserved notes/linked appointments; operational queues/views; dashboard; conditional forms; identity correction; full JSON export; minimum text readability.
+
+Actual acceptance has passed in Supabase project `uucdnakounzqeqwkzfel`: see `v02-live-test-results.json`, `v02-access-test-results.json` and `v02-live-metrics-results.json`. These are actual HTTPS tests using two independent anonymous identities, explicitly enrolled for 48 hours. No service-role browser key, open enrollment or disabled RLS. Local full suite: 18 passed.
+
+Canonical migration files include all applied V0.2 changes; original initial-file/server-version mapping is documented in README. New migrations were applied only after rechecking zero operational leads/appointments/activities. Synthetic QA records now exist; do not assume the database is empty again. Keep history and migration records intact.
+
+Existing QA deployment to preserve: `https://rawnaq-sales-demo-lt6ppvzdx-eslamba7r1991-8820.vercel.app`. New Preview deployment must identify this branch's exact Git commit and use actual Supabase. Deployment status and URL are verified through Vercel and the final delivery message, not inferred from a local build.
+
+Preview-only anonymous QA flag never grants membership. New anonymous identities see an access-request state until explicitly enrolled with an expiry. Production password Auth/authorization need separate QA before real customer data.
+
+Known security-advisor notices: intentional membership-checked authenticated SECURITY DEFINER RPCs; temporary anonymous policy notices; pre-existing disabled leaked-password protection. Do not claim a production security clearance.

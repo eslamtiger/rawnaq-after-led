@@ -1,7 +1,17 @@
 import "./style.css";
-import { db, configured, rpc, loadWorkspace, arabicError } from "./api.js";
+import {
+  db,
+  configured,
+  rpc,
+  loadWorkspace,
+  arabicError,
+  qaAnonymous,
+} from "./api.js";
 import {
   STAGES,
+  QUALIFICATIONS,
+  followupBucket,
+  appointmentMatches,
   GRADES,
   OUTCOMES,
   ACTIONS,
@@ -42,6 +52,8 @@ let session = null,
   filterSource = "",
   rangeFrom = "",
   rangeTo = "",
+  followupView = "overdue",
+  appointmentView = "today",
   pageIndex = 0,
   loading = false,
   mutation = false,
@@ -104,13 +116,17 @@ const peopleOptions = (value) =>
   options(
     Object.fromEntries(
       data.profiles
-        .filter((p) => p.active && (me.role === "admin" || p.id === me.id))
+        .filter(
+          (p) =>
+            p.active &&
+            (me.role === "admin" || p.id === me.id || p.id === value),
+        )
         .map((p) => [p.id, p.display_name]),
     ),
     value,
   );
 const badge = (l) =>
-  `<span class="badge ${["lost", "unqualified"].includes(l.stage) ? "red" : l.stage === "attended" ? "green" : l.stage === "booked" ? "gold" : ""}">${STAGES[l.stage]}</span>`;
+  `<span class="badge ${l.stage === "lost" ? "red" : l.stage === "attended" ? "green" : l.stage === "booked" ? "gold" : ""}">${STAGES[l.stage]}</span>`;
 const field = (name, title, html, wide = false) =>
   `<label class="field ${wide ? "wide" : ""}" for="${name}"><span>${title}</span>${html}</label>`;
 const input = (n, t = "text", v = "", req = false, extra = "") =>
@@ -128,7 +144,7 @@ function blank(title, body, action = "") {
   return `<div class="empty"><div class="empty-icon">${icon("users")}</div><h3>${title}</h3><p>${body}</p>${action}</div>`;
 }
 function login() {
-  root.innerHTML = `<main class="auth"><section class="auth-story"><div class="wordmark">رونق<span>RAWNAQ</span></div><div><div class="eyebrow">كل استفسار يستحق اهتمام</div><h1>متابعة أوضح.<br>تجربة أرقى.</h1><p>من أول رسالة، لحد الحجز والحضور.<br>خطوة واضحة لكل عميلة، في مكان واحد.</p></div><small>نظام متابعة العميلات · الإصدار ٠٫١</small></section><section class="auth-form"><div class="auth-box"><span class="eyebrow">أهلًا بيكي في رونق</span><h2>دخول فريق العمل</h2><p>استخدمي حسابك المخصص لمتابعة العميلات.</p>${!configured ? `<div class="notice"><strong>تجهيز الاتصال لم يكتمل</strong><p>قاعدة البيانات وتسجيل الدخول لم يتم ربطهما بهذه النسخة بعد. لا يمكن تسجيل أو حفظ بيانات عميلات حتى اكتمال الربط.</p></div>` : `<form id="login-form">${field("email", "البريد الإلكتروني", input("email", "email", "", true, 'dir="ltr" autocomplete="username"'))}${field("password", "كلمة المرور", input("password", "password", "", true, 'dir="ltr" autocomplete="current-password" minlength="8"'))}<div class="form-error" role="alert"></div><button class="primary full" type="submit">تسجيل الدخول ${icon("arrow")}</button></form>`}<div class="auth-note">الدخول مخصص لحسابات الفريق المصرح لها.<br>لو محتاجة حساب، تواصلي مع إدارة المركز.</div></div></section></main>`;
+  root.innerHTML = `<main class="auth"><section class="auth-story"><div class="wordmark">رونق<span>RAWNAQ</span></div><div><div class="eyebrow">كل استفسار يستحق اهتمام</div><h1>متابعة أوضح.<br>تجربة أرقى.</h1><p>من أول رسالة، لحد الحجز والحضور.<br>خطوة واضحة لكل عميلة، في مكان واحد.</p></div><small>نظام متابعة العميلات · الإصدار ٠٫٢</small></section><section class="auth-form"><div class="auth-box"><span class="eyebrow">أهلًا بيكي في رونق</span><h2>دخول فريق العمل</h2><p>استخدمي حسابك المخصص لمتابعة العميلات.</p>${!configured ? `<div class="notice"><strong>تجهيز الاتصال لم يكتمل</strong><p>قاعدة البيانات وتسجيل الدخول لم يتم ربطهما بهذه النسخة بعد. لا يمكن تسجيل أو حفظ بيانات عميلات حتى اكتمال الربط.</p></div>` : `<form id="login-form">${field("email", "البريد الإلكتروني", input("email", "email", "", true, 'dir="ltr" autocomplete="username"'))}${field("password", "كلمة المرور", input("password", "password", "", true, 'dir="ltr" autocomplete="current-password" minlength="8"'))}<div class="form-error" role="alert"></div><button class="primary full" type="submit">تسجيل الدخول ${icon("arrow")}</button></form>`}<div class="auth-note">الدخول مخصص لحسابات الفريق المصرح لها.<br>لو محتاجة حساب، تواصلي مع إدارة المركز.</div></div></section></main>`;
   document
     .querySelector("#login-form")
     ?.addEventListener("submit", async (e) => {
@@ -157,23 +173,20 @@ async function refresh() {
     data = await loadWorkspace();
     me = data.profiles.find((p) => p.id === session.user.id && p.active);
     if (!me) {
-      root.innerHTML = `<main class="access">${blank("الحساب يحتاج تصريح من الإدارة", "تم تسجيل الدخول، لكن الحساب غير مضاف لفريق رونق أو تم إيقافه.", '<button data-act="logout">تسجيل الخروج</button>')}</main>`;
+      root.innerHTML = `<main class="access">${blank("الحساب يحتاج تصريح من الإدارة", "تم تسجيل الدخول، لكن الحساب غير مضاف لفريق رونق أو تم إيقافه. معرّف طلب التصريح: ${esc(session.user.id)}", '<button data-act="logout">تسجيل الخروج</button>')}</main>`;
       bind();
       return;
     }
     render();
   } catch (e) {
-    if (me) toast(arabicError(e), true);
-    else {
-      root.innerHTML = `<main class="access">${blank("تعذر تحميل بيانات الفريق", arabicError(e), '<button data-act="refresh">إعادة المحاولة</button> <button data-act="logout">تسجيل الخروج</button>')}</main>`;
-      bind();
-    }
+    root.innerHTML = `<main class="access">${blank("تعذر تحميل بيانات الفريق", arabicError(e), '<button data-act="refresh">إعادة المحاولة</button> <button data-act="logout">تسجيل الخروج</button>')}</main>`;
+    bind();
   } finally {
     loading = false;
   }
 }
 function render() {
-  root.innerHTML = `<div class="workspace"><aside class="sidebar"><a class="wordmark" href="#today">رونق<span>RAWNAQ</span></a><div class="sidebar-caption">متابعة العميلات</div><nav aria-label="التنقل الرئيسي">${nav.map(([id, title, i]) => `<button data-page="${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><span class="avatar">${esc(me.display_name.charAt(0))}</span><div><strong>${esc(me.display_name)}</strong><small>${me.role === "admin" ? "إدارة المركز" : "موظفة المبيعات"}</small></div><button class="icon-button" data-act="logout" aria-label="تسجيل الخروج">${icon("logout")}</button></div></aside><div class="main"><header class="topbar"><div class="breadcrumb">رونق <span>/</span> ${nav.find((n) => n[0] === page)?.[1]}</div><div class="top-actions"><span class="connection"><i></i> متصل</span><button class="icon-button" data-act="refresh" aria-label="تحديث البيانات">${icon("refresh")}</button></div></header><main class="content">${selected ? profileView() : pageView()}</main><footer>توقيت القاهرة · البيانات حسب صلاحيات حسابك <span>رونق — متابعة باهتمام</span></footer></div></div><dialog id="modal" aria-labelledby="modal-title"></dialog>`;
+  root.innerHTML = `<div class="workspace"><aside class="sidebar"><a class="wordmark" href="#today">رونق<span>RAWNAQ</span></a><div class="sidebar-caption">متابعة العميلات</div><nav aria-label="التنقل الرئيسي">${nav.map(([id, title, i]) => `<button data-page="${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><span class="avatar">${esc(me.display_name.charAt(0))}</span><div><strong>${esc(me.display_name)}</strong><small>${me.role === "admin" ? "إدارة المركز" : "موظفة المبيعات"}</small></div><button class="icon-button" data-act="logout" aria-label="تسجيل الخروج">${icon("logout")}</button></div></aside><div class="main"><header class="topbar"><div class="breadcrumb">رونق <span>/</span> ${nav.find((n) => n[0] === page)?.[1]}</div><div class="top-actions"><span class="connection"><i></i> متصل</span><button class="icon-button" data-act="refresh" aria-label="تحديث البيانات">${icon("refresh")}</button></div></header><main class="content">${selected ? profileView() : pageView()}</main><footer>توقيت القاهرة · ${session.user.is_anonymous ? "اختبار QA مؤقت — بيانات وهمية فقط · " : ""}البيانات حسب صلاحيات حسابك <span>رونق — متابعة باهتمام</span></footer></div></div><dialog id="modal" aria-labelledby="modal-title"></dialog>`;
   bind();
 }
 function heading(k, title, sub, action = "") {
@@ -248,7 +261,7 @@ function leadList() {
   let leads = filtered();
   if (page === "followups")
     leads = leads
-      .filter((l) => !TERMINAL.includes(l.stage))
+      .filter((l) => followupBucket(l) === followupView)
       .sort(
         (a, b) =>
           priority(a) - priority(b) ||
@@ -258,7 +271,7 @@ function leadList() {
     leads.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   const pages = Math.max(1, Math.ceil(leads.length / 20));
   pageIndex = Math.min(pageIndex, pages - 1);
-  return `${heading("كل التفاصيل في مكان واحد", page === "leads" ? "العميلات المحتملات" : "المتابعات", page === "leads" ? "ملف واحد لكل عميلة، وتاريخ واضح لكل خطوة." : "راجعي الموعد والخطوة القادمة قبل التواصل.", addButton())}${filters(true)}<section class="panel"><div class="panel-head"><h2>${page === "leads" ? "سجل العميلات" : "قائمة المتابعة"}</h2><span class="count">${number(leads.length)} عميلة</span></div>${
+  return `${heading("كل التفاصيل في مكان واحد", page === "leads" ? "العميلات المحتملات" : "المتابعات", page === "leads" ? "ملف واحد لكل عميلة، وتاريخ واضح لكل خطوة." : "راجعي الموعد والخطوة القادمة قبل التواصل.", addButton())}${filters(true)}${page === "followups" ? viewTabs({ overdue: "متأخر", today: "اليوم", upcoming: "قادم" }, followupView, "queue") : ""}<section class="panel"><div class="panel-head"><h2>${page === "leads" ? "سجل العميلات" : "قائمة المتابعة"}</h2><span class="count">${number(leads.length)} عميلة</span></div>${
     leads.length
       ? `<div class="list-caption"><span>العميلة والاهتمام</span><span>الخطوة القادمة</span></div>${leads
           .slice(pageIndex * 20, pageIndex * 20 + 20)
@@ -286,14 +299,40 @@ function profileView() {
       .filter((a) => a.lead_id === l.id)
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
     closed = TERMINAL.includes(l.stage);
-  return `<button class="text-button back" data-act="back">→ رجوع للقائمة</button>${heading("ملف العميلة", esc(l.name), `${esc(label(l.service_id))} · ${esc(label(l.source_id))}`, badge(l))}<div class="profile-grid"><section class="profile-main"><section class="panel"><div class="panel-head"><h2>الخطوة القادمة</h2>${!closed ? `<button class="text-button" data-act="edit">تحديث البيانات</button>` : ""}</div><div class="action-box ${l.next_at && Date.parse(l.next_at) < Date.now() ? "overdue" : ""}"><div>${icon("clock")}<h3>${ACTIONS[l.next_action] || "الملف مغلق"}</h3></div><p>${l.next_at ? formatDate(l.next_at) : "لا توجد متابعة مفتوحة"}</p><small>${esc(l.need) || "ملخص الاحتياج لم يُسجل بعد."}</small></div><div class="profile-actions">${closed ? '<button class="primary" data-act="reopen">إعادة فتح الملف</button>' : `<button class="primary" data-act="contact">تسجيل تواصل</button><button data-act="edit">تحديث الحالة</button><button data-act="book">${icon("calendar")} تثبيت حجز</button>`}</div></section><section class="panel"><div class="panel-head"><h2>الحجوزات</h2><span class="count">${number(apps.length)}</span></div>${apps.length ? apps.map((a) => `<div class="booking-card"><div><strong>${formatDate(a.starts_at)}</strong><span class="badge ${a.status === "attended" ? "green" : "gold"}">${APPOINTMENTS[a.status]}</span></div><p>${esc(a.note) || "لا توجد ملاحظات"}</p>${["scheduled", "confirmed"].includes(a.status) ? `<button data-appointment="${a.id}">تسجيل نتيجة الحجز</button>` : ""}</div>`).join("") : blank("لم يتم تسجيل حجز", "بعد وضوح الاحتياج وعرض الحجز، ثبّتي الموعد المتفق عليه.")}</section><section class="panel"><div class="panel-head"><h2>تاريخ المتابعة</h2><span class="count">${number(history.length)}</span></div><ol class="timeline">${history.map((a) => `<li><div class="timeline-dot"></div><div><strong>${esc(a.body)}</strong><p>${esc(person(a.actor_id))} · ${formatDate(a.created_at)}</p>${a.details.outcome ? `<span class="badge">${OUTCOMES[a.details.outcome] || ""}</span>` : ""}${a.details.stage ? `<small>الحالة: ${STAGES[a.details.previous_stage]} ← ${STAGES[a.details.stage]}</small>` : ""}${a.details.status ? `<small>الحجز: ${APPOINTMENTS[a.details.status]}</small>` : ""}${a.details.starts_at ? `<small>${formatDate(a.details.starts_at)}</small>` : ""}${a.details.note ? `<small>${esc(a.details.note)}</small>` : ""}${a.details.contact_at ? `<small>وقت التواصل: ${formatDate(a.details.contact_at)}</small>` : ""}</div></li>`).join("")}</ol></section></section><aside class="side-stack"><section class="panel profile-info"><div class="panel-head"><h2>بيانات العميلة</h2></div><dl><dt>رقم / معرف التواصل</dt><dd><bdi dir="ltr">${esc(l.contact)}</bdi></dd><dt>الموظفة المسؤولة</dt><dd>${esc(person(l.owner_id))}</dd><dt>درجة الاستعداد</dt><dd>${GRADES[l.grade]}</dd><dt>تاريخ الاستفسار</dt><dd>${formatDate(l.received_at)}</dd><dt>أول رد</dt><dd>${l.first_response_at ? formatDate(l.first_response_at) : "لم يُسجل"}</dd><dt>الحملة</dt><dd>${esc(l.campaign) || "غير محددة"}</dd><dt>الاعتراض الرئيسي</dt><dd>${esc(label(l.objection_id))}</dd><dt>عدد المتابعات المسجلة</dt><dd>${number(l.follow_up_count)}</dd>${l.lost_reason_id ? `<dt>سبب الفقد</dt><dd>${esc(label(l.lost_reason_id))}</dd>` : ""}<dt>آخر ملاحظة</dt><dd>${esc(l.note) || "لا توجد"}</dd></dl></section><section class="tip"><div class="tip-label">قبل التواصل</div><p>${esc(configs("script").find((s) => s.id === (l.objection_id ? "script_think" : "script_followup"))?.body || "راجعي تاريخ العميلة قبل المتابعة.")}</p><button class="text-button" data-page="scripts">دليل التواصل ${icon("arrow")}</button></section></aside></div>`;
+  return `<button class="text-button back" data-act="back">→ رجوع للقائمة</button>${heading("ملف العميلة", esc(l.name), `${esc(label(l.service_id))} · ${esc(label(l.source_id))}`, badge(l))}<div class="profile-grid"><section class="profile-main"><section class="panel"><div class="panel-head"><h2>الخطوة القادمة</h2>${!closed ? `<button class="text-button" data-act="edit">تحديث البيانات</button>` : ""}</div><div class="action-box ${l.next_at && Date.parse(l.next_at) < Date.now() ? "overdue" : ""}"><div>${icon("clock")}<h3>${ACTIONS[l.next_action] || "الملف مغلق"}</h3></div><p>${l.next_at ? formatDate(l.next_at) : "لا توجد متابعة مفتوحة"}</p><small>${esc(l.need) || "ملخص الاحتياج لم يُسجل بعد."}</small></div><div class="profile-actions">${closed ? '<button class="primary" data-act="reopen">إعادة فتح الملف</button>' : `<button class="primary" data-act="contact">تسجيل تواصل</button><button data-act="edit">تحديث الحالة</button><button data-act="book">${icon("calendar")} ${l.stage === "no_show" ? "إعادة الحجز" : "تثبيت حجز"}</button>${l.stage === "no_show" ? `<button data-act="recover-followup">متابعة</button><button data-act="recover-lost">إغلاق كـ Lost</button>` : ""}${!l.booking_offered_at ? `<button data-act="offer">تم عرض الحجز</button>` : `<span class="badge">عُرض الحجز ${formatDate(l.booking_offered_at)}</span>`}`}</div></section><section class="panel"><div class="panel-head"><h2>الحجوزات</h2><span class="count">${number(apps.length)}</span></div>${
+    apps.length
+      ? apps
+          .map(
+            (a) =>
+              `<div class="booking-card"><div><strong>${formatDate(a.starts_at)}</strong><span class="badge ${a.status === "attended" ? "green" : "gold"}">${APPOINTMENTS[a.status]}</span></div><p>${esc(a.note) || "لا توجد ملاحظات حجز"}</p>${[
+                ["reschedule_note", "تعديل الموعد"],
+                ["no_show_note", "عدم الحضور"],
+                ["attendance_note", "الحضور"],
+                ["rebooking_note", "إعادة الحجز"],
+              ]
+                .filter(([k]) => a[k])
+                .map(([k, title]) => `<p>${title}: ${esc(a[k])}</p>`)
+                .join(
+                  "",
+                )}${["scheduled", "confirmed"].includes(a.status) ? `<button data-appointment="${a.id}">تسجيل نتيجة الحجز</button><button data-reschedule="${a.id}">تعديل الموعد</button>` : ""}</div>`,
+          )
+          .join("")
+      : blank(
+          "لم يتم تسجيل حجز",
+          "بعد وضوح الاحتياج وعرض الحجز، ثبّتي الموعد المتفق عليه.",
+        )
+  }</section><section class="panel"><div class="panel-head"><h2>تاريخ المتابعة</h2><span class="count">${number(history.length)}</span></div><ol class="timeline">${history.map((a) => `<li><div class="timeline-dot"></div><div><strong>${esc(a.body)}</strong><p>${esc(person(a.actor_id))} · ${formatDate(a.created_at)}</p>${activityDetails(a)}${a.details.outcome ? `<span class="badge">${OUTCOMES[a.details.outcome] || ""}</span>` : ""}${a.details.stage ? `<small>الحالة: ${STAGES[a.details.previous_stage]} ← ${STAGES[a.details.stage]}</small>` : ""}${a.details.status ? `<small>الحجز: ${APPOINTMENTS[a.details.status]}</small>` : ""}${a.details.starts_at ? `<small>${formatDate(a.details.starts_at)}</small>` : ""}${a.details.note ? `<small>${esc(a.details.note)}</small>` : ""}${a.details.contact_at ? `<small>وقت التواصل: ${formatDate(a.details.contact_at)}</small>` : ""}</div></li>`).join("")}</ol></section></section><aside class="side-stack"><section class="panel profile-info"><div class="panel-head"><h2>بيانات العميلة</h2><button data-act="identity">تصحيح البيانات</button></div><dl><dt>رقم / معرف التواصل</dt><dd><bdi dir="ltr">${esc(l.contact)}</bdi></dd><dt>الموظفة المسؤولة</dt><dd>${esc(person(l.owner_id))}</dd><dt>حالة العميلة</dt><dd>${STAGES[l.stage]}</dd><dt>التأهيل</dt><dd>${QUALIFICATIONS[l.qualification]}</dd><dt>درجة الاهتمام</dt><dd>${GRADES[l.grade] || "لم يُقيّم"}</dd><dt>تاريخ الاستفسار</dt><dd>${formatDate(l.received_at)}</dd><dt>أول رد</dt><dd>${l.first_response_at ? formatDate(l.first_response_at) : "لم يُسجل"}</dd><dt>الحملة</dt><dd>${esc(l.campaign) || "غير محددة"}</dd><dt>الاعتراض الرئيسي</dt><dd>${esc(label(l.objection_id))}</dd><dt>عدد المتابعات المسجلة</dt><dd>${number(l.follow_up_count)}</dd>${l.lost_reason_id ? `<dt>سبب الفقد</dt><dd>${esc(label(l.lost_reason_id))}</dd>` : ""}<dt>آخر ملاحظة</dt><dd>${esc(l.note) || "لا توجد"}</dd></dl></section><section class="tip"><div class="tip-label">قبل التواصل</div><p>${esc(configs("script").find((s) => s.id === (l.objection_id ? "script_think" : "script_followup"))?.body || "راجعي تاريخ العميلة قبل المتابعة.")}</p><button class="text-button" data-page="scripts">دليل التواصل ${icon("arrow")}</button></section></aside></div>`;
 }
 function appointmentsView() {
   const ids = new Set(filtered().map((l) => l.id));
   const apps = data.appointments
-    .filter((a) => ids.has(a.lead_id))
-    .sort((a, b) => Date.parse(b.starts_at) - Date.parse(a.starts_at));
-  return `${heading("موعد واضح، وتجربة منظمة", "الحجوزات", "المواعيد المسجلة بالتوقيت المحلي للقاهرة. الإتاحة تُراجع مع المركز قبل التثبيت.")}${filters()}<section class="panel"><div class="panel-head"><h2>كل الحجوزات</h2><span class="count">${number(apps.length)}</span></div>${
+    .filter((a) => ids.has(a.lead_id) && appointmentMatches(a, appointmentView))
+    .sort((a, b) =>
+      appointmentView === "past"
+        ? Date.parse(b.starts_at) - Date.parse(a.starts_at)
+        : Date.parse(a.starts_at) - Date.parse(b.starts_at),
+    );
+  return `${heading("موعد واضح، وتجربة منظمة", "الحجوزات", "المواعيد المسجلة بالتوقيت المحلي للقاهرة. الإتاحة تُراجع مع المركز قبل التثبيت.")}${filters()}${viewTabs({ today: "اليوم", upcoming: "قادمة", past: "سابقة", booked: "محجوز", attended: "حضر", no_show: "لم يحضر", rescheduled: "أعيد تحديده", all: "الكل" }, appointmentView, "appointments")}<section class="panel"><div class="panel-head"><h2>كل الحجوزات</h2><span class="count">${number(apps.length)}</span></div>${
     apps.length
       ? `<div class="table-wrap"><table><thead><tr><th>العميلة</th><th>الموعد</th><th>الموظفة</th><th>حالة الحجز</th><th>الإجراء</th></tr></thead><tbody>${apps
           .map((a) => {
@@ -317,7 +356,7 @@ function dashboard() {
       ["تم عرض الحجز", m.offered],
       ["تم الحجز مرة على الأقل", m.booked],
     ];
-  return `${heading("قرارات مبنية على بيانات", "لوحة المتابعة", "المؤشرات مرتبطة بتاريخ وصول الاستفسار، وبتشمل المراحل المسجلة تاريخيًا.", `<button data-act="export">تصدير النتائج</button>`)}${filters(true)}<section class="stats dashboard-stats">${stat("إجمالي العميلات", number(m.total), "داخل النطاق المختار")}${stat("نسبة الرد", percent(m.replied, m.total), `${number(m.replied)} تم الرد عليهن`)}${stat("متوسط أول رد", m.response === null ? "—" : number(m.response) + " د", "زمن فعلي، يشمل خارج ساعات العمل")}${stat("التحويل إلى حجز", percent(m.booked, m.total), `${number(m.booked)} عميلة حجزت`, "highlight")}${stat("الحضور من المواعيد المستحقة", percent(m.attended, m.dueAppointments), `${number(m.attended)} حضور من ${number(m.dueAppointments)} موعد مستحق`)}${stat("مواعيد بدون نتيجة", number(m.unrecorded), "مواعيد مرّ وقتها ولم يُسجل حضورها")}</section><div class="analytics-grid"><section class="panel"><div class="panel-head"><h2>مسار التحويل</h2></div><div class="funnel">${stages.map(([s, n], i) => `<div class="funnel-item"><div><span>${s}</span><strong>${number(n)}</strong></div><progress max="${m.total || 1}" value="${n}" aria-label="${s}"></progress><small>${percent(n, m.total)} من الإجمالي${i > 0 ? " · " + percent(n, stages[i - 1][1]) + " من السابقة" : ""}</small></div>`).join("")}</div></section><section class="panel"><div class="panel-head"><h2>أسباب الفقد</h2></div>${configs(
+  return `${heading("قرارات مبنية على بيانات", "لوحة المتابعة", "المؤشرات مرتبطة بتاريخ وصول الاستفسار، وبتشمل المراحل المسجلة تاريخيًا.", `<button data-act="export">تصدير التقرير</button><button data-act="backup">نسخة كاملة JSON</button>`)}${filters(true)}<section class="stats dashboard-stats">${stat("العميلات النشطات", number(m.active), "عميلات غير مغلقات")}${stat("عُرض الحجز", number(m.offered), "عميلات فريدات")}${stat("حجزن", number(m.booked), "عميلات حجزن مرة على الأقل")}${stat("حضرن", number(m.attended), "عميلات فريدات")}${stat("الحضور من الحجز", percent(m.attended, m.booked), "عميلات حضرن ÷ عميلات حجزن")}${stat("لم يحضرن", number(m.noShow), "عميلات لديهن غياب تاريخي، يشمل من أعدن الحجز")}${stat("مفقودات", number(m.lost))}${stat("متابعات اليوم", number(m.today), "متبقي اليوم؛ المتأخر منفصل")}${stat("متابعات متأخرة", number(m.overdue))}${stat("إجمالي العميلات", number(m.total), "داخل النطاق المختار")}${stat("نسبة الرد", percent(m.replied, m.total), `${number(m.replied)} تم الرد عليهن`)}${stat("متوسط أول رد", m.response === null ? "—" : number(m.response) + " د", "زمن فعلي، يشمل خارج ساعات العمل")}${stat("التحويل إلى حجز", percent(m.booked, m.total), `${number(m.booked)} عميلة حجزت`, "highlight")}${stat("مواعيد بدون نتيجة", number(m.unrecorded), "مواعيد مرّ وقتها ولم يُسجل حضورها")}</section><div class="analytics-grid"><section class="panel"><div class="panel-head"><h2>مسار التحويل</h2></div><div class="funnel">${stages.map(([s, n], i) => `<div class="funnel-item"><div><span>${s}</span><strong>${number(n)}</strong></div><progress max="${m.total || 1}" value="${n}" aria-label="${s}"></progress><small>${percent(n, m.total)} من الإجمالي${i > 0 ? " · " + percent(n, stages[i - 1][1]) + " من السابقة" : ""}</small></div>`).join("")}</div></section><section class="panel"><div class="panel-head"><h2>أسباب الفقد</h2></div>${configs(
     "lost_reason",
   )
     .map((c) => {
@@ -352,7 +391,7 @@ function dashboard() {
             "",
           )}</tbody></table></div><p class="panel-note">الإسناد للموظفة الحالية. سجل النشاط يحتفظ بمن نفّذ كل خطوة؛ المؤشرات ليست تقييمًا منفردًا للموظفة.</p></section>`
       : ""
-  }<p class="footnote">النسبة بدون بيانات تظهر «—». الحضور يحتسب المواعيد التي حل وقتها فقط مع استبعاد الملغي. إعادة الحجز لا تضاعف عدد العميلات اللاتي حجزن.</p>`;
+  } ${performanceTable(leads, "service_id", configs("service"), "الأداء حسب الخدمة")}<p class="footnote">النسبة بدون بيانات تظهر «—». مؤشرات الحجز والحضور والغياب تحسب عميلات فريدات؛ قد تظهر العميلة في الغياب والحضور بعد إعادة الحجز. المواعيد بدون نتيجة تحسب مواعيد. إعادة الحجز لا تضاعف عدد العميلات اللاتي حجزن.</p>`;
 }
 function scripts() {
   return `${heading("محادثات بفهم واهتمام", "دليل التواصل", "قوالب مساعدة. عدّلي التفاصيل حسب كلام العميلة واستخدمي معلومات المركز المعتمدة فقط.")}<div class="notice subtle">لا تشخيص طبي، لا ضمان نتائج، ولا أسعار أو خصومات غير معتمدة. اختيارات المواعيد تُعرض بعد مراجعة الإتاحة.</div><h2 class="section-title">قوالب المحادثة</h2><div class="script-grid">${configs(
@@ -557,7 +596,10 @@ function contactModal(l) {
         `<textarea id="body" name="body" required maxlength="3000" rows="4" placeholder="سجلي ما اتقال والخطوة المتفق عليها"></textarea>`,
         true,
       ) +
-      nextFields({ ...l, next_action: l.first_response_at ? l.next_action : "discovery" }),
+      nextFields({
+        ...l,
+        next_action: l.first_response_at ? l.next_action : "discovery",
+      }),
     (f) =>
       rpc("record_contact", {
         lid: l.id,
@@ -572,8 +614,13 @@ function contactModal(l) {
       }),
   );
 }
-function editModal(l) {
-  const st = l.stage === "new" ? "contacted" : l.stage;
+function editModal(l, initialStage) {
+  const allowed =
+    l.stage === "booked"
+      ? ["booked"]
+      : l.stage === "no_show"
+        ? ["no_show", "follow_up", "lost"]
+        : ["active", "follow_up", "lost"];
   const d = openModal(
     "تحديث حالة العميلة",
     field(
@@ -587,63 +634,143 @@ function editModal(l) {
         select(
           "stage",
           options(
-            Object.fromEntries(
-              (l.stage === "booked"
-                ? ["booked"]
-                : [
-                    "contacted",
-                    "qualified",
-                    "booking_offered",
-                    "follow_up",
-                    "lost",
-                    "unqualified",
-                  ]
-              ).map((k) => [k, STAGES[k]]),
-            ),
-            st,
+            Object.fromEntries(allowed.map((k) => [k, STAGES[k]])),
+            initialStage || (l.stage === "new" ? "active" : l.stage),
           ),
         ),
       ) +
       field(
+        "qualification",
+        "التأهيل",
+        select(
+          "qualification",
+          options(QUALIFICATIONS, l.qualification || "unknown"),
+        ),
+      ) +
+      field(
         "grade",
-        "درجة الاستعداد",
-        select("grade", options(GRADES, l.grade)),
+        "درجة الاهتمام",
+        `<select id="grade" name="grade">${options(GRADES, l.grade, "لم يُقيّم")}</select>`,
       ) +
       field(
         "objection_id",
         "الاعتراض الرئيسي",
-        `<select id="objection_id" name="objection_id">${configOptions("objection", l.objection_id, "لا يوجد / غير محدد")}</select>`,
+        `<select id="objection_id" name="objection_id">${configOptions("objection", l.objection_id, "غير محدد")}</select>`,
       ) +
       field(
         "lost_reason_id",
-        "سبب الفقد — مطلوب عند الفقد",
+        "سبب الفقد",
         `<select id="lost_reason_id" name="lost_reason_id">${configOptions("lost_reason", l.lost_reason_id, "اختاري السبب")}</select>`,
       ) +
       field(
         "need",
         "ملخص الاحتياج",
-        `<textarea id="need" name="need" maxlength="3000" rows="3">${esc(l.need)}</textarea>`,
+        `<textarea id="need" name="need">${esc(l.need)}</textarea>`,
         true,
       ) +
       nextFields(l) +
       field(
         "note",
-        "ملاحظة / سبب عدم التأهيل",
-        `<textarea id="note" name="note" maxlength="3000" rows="3">${esc(l.note)}</textarea>`,
+        "ملاحظة",
+        `<textarea id="note" name="note">${esc(l.note)}</textarea>`,
         true,
       ),
     (f) =>
       rpc("update_lead", {
         lid: l.id,
         expected: l.revision,
-        p: { ...f, next_at: cairoISO(f.next_at) },
+        p: {
+          ...f,
+          owner_id: f.owner_id || l.owner_id,
+          next_at: f.next_at ? cairoISO(f.next_at) : null,
+        },
       }),
   );
-  if (me.role !== "admin")
-    d.querySelector("#owner_id").setAttribute("aria-readonly", "true");
+  if (me.role !== "admin") d.querySelector("#owner_id").disabled = true;
+  const sync = () => {
+    const lost = d.querySelector("#stage").value === "lost";
+    for (const id of ["next_action", "next_at"]) {
+      const el = d.querySelector("#" + id);
+      el.disabled = lost;
+      el.required = !lost;
+      el.closest("label").hidden = lost;
+    }
+    const reason = d.querySelector("#lost_reason_id");
+    reason.required = lost;
+    reason.closest("label").hidden = !lost;
+  };
+  d.querySelector("#stage").onchange = sync;
+  sync();
+}
+function identityModal(l) {
+  openModal(
+    "تصحيح بيانات العميلة",
+    field("name", "الاسم", input("name", "text", l.name, true)) +
+      field(
+        "contact",
+        "رقم التواصل",
+        input("contact", "text", l.contact, true),
+      ) +
+      field(
+        "source_id",
+        "المصدر",
+        select("source_id", configOptions("source", l.source_id)),
+      ) +
+      field(
+        "service_id",
+        "الخدمة",
+        select("service_id", configOptions("service", l.service_id)),
+      ) +
+      field(
+        "campaign",
+        "الحملة / المرجع",
+        input("campaign", "text", l.campaign),
+      ),
+    (f) => {
+      if (!contactValid(f.contact)) throw Error("راجعي رقم التواصل");
+      return rpc("correct_lead", {
+        lid: l.id,
+        expected: l.revision,
+        p: { ...f, contact: normalizeContact(f.contact) },
+      });
+    },
+  );
+}
+function rescheduleModal(id) {
+  const a = data.appointments.find((a) => a.id === id),
+    l = data.leads.find((l) => l.id === a.lead_id);
+  openModal(
+    "إعادة تحديد الموعد",
+    field(
+      "starts_at",
+      "الموعد الجديد — القاهرة",
+      input(
+        "starts_at",
+        "datetime-local",
+        localInput(Date.now() + 86400000),
+        true,
+      ),
+    ) +
+      field(
+        "note",
+        "سبب التعديل",
+        `<textarea id="note" name="note"></textarea>`,
+        true,
+      ),
+    (f) =>
+      rpc("reschedule_appointment", {
+        aid: id,
+        expected: l.revision,
+        p: { ...f, starts_at: cairoISO(f.starts_at) },
+      }),
+  );
 }
 function bookModal(l) {
-  if (!l.first_response_at || !l.qualified_at || !l.booking_offered_at) {
+  if (
+    !l.first_response_at ||
+    l.qualification !== "qualified" ||
+    !l.booking_offered_at
+  ) {
     toast("سجلي الرد والتأهيل وعرض الحجز أولًا، ثم ثبّتي الموعد.", true);
     return;
   }
@@ -677,7 +804,7 @@ function bookModal(l) {
 function appointmentModal(id) {
   const a = data.appointments.find((a) => a.id === id),
     l = data.leads.find((l) => l.id === a.lead_id);
-  openModal(
+  const d = openModal(
     "تسجيل نتيجة الحجز",
     `<p class="wide">${esc(l.name)} · ${formatDate(a.starts_at)}</p>` +
       field(
@@ -711,9 +838,20 @@ function appointmentModal(id) {
       rpc("set_appointment", {
         aid: id,
         expected: l.revision,
-        p: { ...f, next_at: cairoISO(f.next_at) },
+        p: { ...f, next_at: f.next_at ? cairoISO(f.next_at) : null },
       }),
   );
+  const sync = () => {
+    const needed = ["no_show", "cancelled"].includes(
+        d.querySelector("#status").value,
+      ),
+      el = d.querySelector("#next_at");
+    el.disabled = !needed;
+    el.required = needed;
+    el.closest("label").hidden = !needed;
+  };
+  d.querySelector("#status").onchange = sync;
+  sync();
 }
 function reopenModal(l) {
   openModal(
@@ -940,6 +1078,24 @@ function go(target) {
   window.scrollTo(0, 0);
 }
 function bind() {
+  document.querySelectorAll("[data-queue]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        followupView = b.dataset.queue;
+        pageIndex = 0;
+        render();
+      }),
+  );
+  document.querySelectorAll("[data-appointments]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        appointmentView = b.dataset.appointments;
+        render();
+      }),
+  );
+  document
+    .querySelectorAll("[data-reschedule]")
+    .forEach((b) => (b.onclick = () => rescheduleModal(b.dataset.reschedule)));
   document
     .querySelectorAll("[data-page]")
     .forEach((b) => (b.onclick = () => go(b.dataset.page)));
@@ -1008,6 +1164,23 @@ function bind() {
               break;
             case "edit":
               editModal(l);
+              break;
+            case "recover-followup":
+              editModal(l, "follow_up");
+              break;
+            case "recover-lost":
+              editModal(l, "lost");
+              break;
+            case "identity":
+              identityModal(l);
+              break;
+            case "offer":
+              b.disabled = true;
+              await rpc("offer_booking", { lid: l.id, expected: l.revision });
+              await refresh();
+              break;
+            case "backup":
+              await exportBackup();
               break;
             case "book":
               bookModal(l);
@@ -1098,7 +1271,14 @@ async function init() {
         setTimeout(() => {
           if (!document.querySelector("dialog[open]")) refresh();
         }, 0);
-      else login();
+      else if (qaAnonymous) {
+        db.auth.signInAnonymously().then(({ error }) => {
+          if (error) {
+            login();
+            toast(arabicError(error), true);
+          }
+        });
+      } else login();
     }
   });
   setInterval(() => {
@@ -1113,3 +1293,60 @@ async function init() {
   }, 60000);
 }
 init();
+
+function viewTabs(views, current, attribute) {
+  return `<div class="filters" role="group">${Object.entries(views)
+    .map(
+      ([k, v]) =>
+        `<button data-${attribute}="${k}" aria-pressed="${k === current}" class="${k === current ? "primary" : ""}">${v}</button>`,
+    )
+    .join("")}</div>`;
+}
+function activityDetails(a) {
+  const d = a.details || {};
+  if (d.field) {
+    const translate = (v) => {
+      if (v === null) return "غير محدد";
+      if (d.field === "stage") return STAGES[v];
+      if (d.field === "qualification") return QUALIFICATIONS[v];
+      if (d.field === "grade") return GRADES[v];
+      if (d.field === "owner_id") return person(v);
+      if (d.field.endsWith("_id")) return label(v);
+      if (d.field === "next_action") return ACTIONS[v];
+      if (d.field === "next_at") return formatDate(v);
+      return v;
+    };
+    return `<small>${esc(translate(d.old))} ← ${esc(translate(d.new))}</small>`;
+  }
+  return d.next_at
+    ? `<small>المتابعة: ${esc(ACTIONS[d.next_action] || "")} · ${formatDate(d.next_at)}</small>`
+    : "";
+}
+function performanceTable(leads, key, groups, title) {
+  return `<section class="panel"><h2>${title}</h2><div class="table-wrap"><table><thead><tr><th>الفئة</th><th>العميلات</th><th>حجزن</th><th>حضرن</th><th>التحويل للحجز</th></tr></thead><tbody>${groups
+    .map((g) => {
+      const m = metrics(
+        leads.filter((l) => l[key] === g.id),
+        data.appointments,
+      );
+      return `<tr><td>${esc(g.label)}</td><td>${number(m.total)}</td><td>${number(m.booked)}</td><td>${number(m.attended)}</td><td>${percent(m.booked, m.total)}</td></tr>`;
+    })
+    .join("")}</tbody></table></div></section>`;
+}
+async function exportBackup() {
+  const fresh = await loadWorkspace();
+  if (me.role !== "admin") throw Error("النسخة الكاملة متاحة للإدارة فقط");
+  const content = {
+    schema_version: "0.2",
+    exported_at: new Date().toISOString(),
+    timezone: "Africa/Cairo",
+    ...fresh,
+  };
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(
+    new Blob([JSON.stringify(content, null, 2)], { type: "application/json" }),
+  );
+  a.download = "rawnaq-v02-backup.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}

@@ -1,0 +1,27 @@
+{
+  "source": "Actual Supabase HTTP snapshot",
+  "cohort": "19552c07",
+  "metrics": {
+    "total": 6,
+    "replied": 6,
+    "response": 60.26647777777777,
+    "qualified": 6,
+    "active": 1,
+    "lost": 2,
+    "noShow": 1,
+    "offered": 4,
+    "booked": 4,
+    "attended": 3,
+    "dueAppointments": 4,
+    "unrecorded": 0,
+    "unanswered": 0,
+    "today": 0,
+    "overdue": 0
+  },
+  "passed": [
+    "unique-lead counts after no-show/rebook/reschedule",
+    "source/rep/service cohort data references",
+    "full-fidelity JSON relational round trip"
+  ],
+  "failed": []
+}

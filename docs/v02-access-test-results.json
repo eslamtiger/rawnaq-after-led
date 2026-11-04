@@ -1,0 +1,5 @@
+{
+  "passed": 9,
+  "failed": 0,
+  "test": "actual Supabase HTTPS with enrolled and unprovisioned anonymous users; no service key"
+}

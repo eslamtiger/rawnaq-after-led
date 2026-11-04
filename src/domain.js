@@ -1,19 +1,21 @@
 export const STAGES = {
   new: "جديدة",
-  contacted: "تم الرد",
-  qualified: "مؤهلة",
-  booking_offered: "تم عرض الحجز",
+  active: "نشطة",
   follow_up: "متابعة",
-  booked: "تم الحجز",
+  booked: "محجوزة",
+  no_show: "لم تحضر",
   attended: "حضرت",
-  unqualified: "غير مؤهلة",
   lost: "مفقودة",
+};
+export const QUALIFICATIONS = {
+  unknown: "لم يُقيّم",
+  qualified: "مؤهلة",
+  not_qualified: "غير مؤهلة",
 };
 export const GRADES = {
   hot: "جاهزة للحجز",
   warm: "مهتمة",
   cold: "اهتمام مبدئي",
-  unqualified: "غير مؤهلة",
 };
 export const OUTCOMES = {
   interested: "مازالت مهتمة",
@@ -38,6 +40,7 @@ export const APPOINTMENTS = {
   attended: "حضرت",
   no_show: "لم تحضر",
   cancelled: "ملغي",
+  rescheduled: "أعيد تحديده",
 };
 export const QA = [
   ["response", "سرعة الرد", 10],
@@ -49,7 +52,7 @@ export const QA = [
   ["booking", "طلب الحجز", 15],
   ["follow_up", "المتابعة", 10],
 ];
-export const TERMINAL = ["lost", "unqualified", "attended"];
+export const TERMINAL = ["lost", "attended"];
 export const esc = (s = "") =>
   String(s ?? "").replace(
     /[&<>"']/g,
@@ -108,7 +111,14 @@ export function cairoISO(wall) {
     throw Error("راجعي التاريخ والوقت");
   const [year, month, day, hour, minute] = wall.split(/[-T:]/).map(Number);
   const calendar = new Date(Date.UTC(year, month - 1, day, hour, minute));
-  if (year < 100 || calendar.getUTCFullYear() !== year || calendar.getUTCMonth() !== month - 1 || calendar.getUTCDate() !== day || calendar.getUTCHours() !== hour || calendar.getUTCMinutes() !== minute)
+  if (
+    year < 100 ||
+    calendar.getUTCFullYear() !== year ||
+    calendar.getUTCMonth() !== month - 1 ||
+    calendar.getUTCDate() !== day ||
+    calendar.getUTCHours() !== hour ||
+    calendar.getUTCMinutes() !== minute
+  )
     throw Error("راجعي التاريخ والوقت");
   const target = Date.parse(wall + "Z");
   let guess = target;
@@ -123,11 +133,7 @@ export function cairoISO(wall) {
 export function priority(l, now = Date.now()) {
   if (TERMINAL.includes(l.stage)) return 99;
   if (!l.first_response_at) return 0;
-  if (
-    l.next_at &&
-    Date.parse(l.next_at) < now
-  )
-    return 1;
+  if (l.next_at && Date.parse(l.next_at) < now) return 1;
   if (l.grade === "hot" && !l.booking_offered_at) return 2;
   if (l.next_at && cairoDay(l.next_at) === cairoDay(now)) return 3;
   return 4;
@@ -153,7 +159,7 @@ export function metrics(leads, appointments, now = Date.now()) {
   const due = appointments.filter(
     (a) =>
       ids.has(a.lead_id) &&
-      !["cancelled"].includes(a.status) &&
+      !["cancelled", "rescheduled"].includes(a.status) &&
       Date.parse(a.starts_at) <= now,
   );
   return {
@@ -162,10 +168,21 @@ export function metrics(leads, appointments, now = Date.now()) {
     response: times.length
       ? times.reduce((a, b) => a + b, 0) / times.length
       : null,
-    qualified: leads.filter((l) => l.qualified_at).length,
+    qualified: leads.filter((l) => l.qualification === "qualified").length,
+    active: leads.filter((l) => !TERMINAL.includes(l.stage)).length,
+    lost: leads.filter((l) => l.stage === "lost").length,
+    noShow: new Set(
+      appointments
+        .filter((a) => ids.has(a.lead_id) && a.status === "no_show")
+        .map((a) => a.lead_id),
+    ).size,
     offered: leads.filter((l) => l.booking_offered_at).length,
     booked: leads.filter((l) => l.first_booked_at).length,
-    attended: due.filter((a) => a.status === "attended").length,
+    attended: new Set(
+      appointments
+        .filter((a) => ids.has(a.lead_id) && a.status === "attended")
+        .map((a) => a.lead_id),
+    ).size,
     dueAppointments: due.length,
     unrecorded: due.filter((a) => ["scheduled", "confirmed"].includes(a.status))
       .length,
@@ -181,9 +198,7 @@ export function metrics(leads, appointments, now = Date.now()) {
     ).length,
     overdue: leads.filter(
       (l) =>
-        !TERMINAL.includes(l.stage) &&
-        l.next_at &&
-        Date.parse(l.next_at) < now,
+        !TERMINAL.includes(l.stage) && l.next_at && Date.parse(l.next_at) < now,
     ).length,
   };
 }
@@ -218,4 +233,21 @@ export function safeCSV(rows) {
       )
       .join("\r\n")
   );
+}
+
+export function followupBucket(l, now = Date.now()) {
+  if (TERMINAL.includes(l.stage) || !l.next_at) return null;
+  if (Date.parse(l.next_at) < now) return "overdue";
+  return cairoDay(l.next_at) === cairoDay(now) ? "today" : "upcoming";
+}
+export function appointmentMatches(a, view, now = Date.now()) {
+  if (view === "today") return cairoDay(a.starts_at) === cairoDay(now);
+  if (view === "upcoming")
+    return (
+      Date.parse(a.starts_at) > now &&
+      ["scheduled", "confirmed"].includes(a.status)
+    );
+  if (view === "past") return Date.parse(a.starts_at) <= now;
+  if (view === "booked") return ["scheduled", "confirmed"].includes(a.status);
+  return view === "all" || a.status === view;
 }

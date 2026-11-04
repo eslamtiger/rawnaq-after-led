@@ -1,60 +1,30 @@
 {
-  "version": "0.1.0",
-  "status": "deployed_ready_pending_first_admin_and_browser_auth_verification",
-  "source_library_file_id": "libfile_aed8e64753e481918312a1a22beef256",
-  "source_sheets_read": 10,
+  "version": "0.2.0",
+  "status": "core_supabase_acceptance_passed",
+  "branch": "fix/rawnaq-v0-2-core-pilot",
   "supabase": {
-    "connection_verified": true,
-    "projects_found": 0,
-    "available_organization_name": "eslam",
-    "available_organization_id": "eapxvwwmpektfpexsevx",
-    "organization_selection_confirmed": true,
     "project_id": "uucdnakounzqeqwkzfel",
-    "migrations_applied_to_live": true,
-    "authentication_tested_live": false,
-    "project_url": "https://uucdnakounzqeqwkzfel.supabase.co",
-    "seeded_configuration_count": 43,
-    "rls_tables": 6,
-    "first_admin_created": false
-  },
-  "vercel": {
-    "target_team_id": "team_OHgya7JwzJLvOOiElephMX6z",
-    "requested_project_name": "rawnaq-after-lead-sales",
-    "project_created": true,
-    "blocker": "Vercel GitHub integration cannot find private repository; direct file deployment succeeded.",
-    "live_url": "https://rawnaq-after-lead-sales.vercel.app",
-    "project_id": "prj_ux2P13P3HPvPOu4L7v9knyxz92fQ",
-    "deployment_id": "dpl_8g2i5HJniSrXxj2aDAXuGRkjHZvb",
-    "deployment_state": "READY",
-    "deployed_source_commit": "390f2a79399f1f0ec7aed7bda2429e0b37c00084",
-    "deployment_method": "inline source files from same GitHub commit",
-    "git_auto_deploy_connected": false,
-    "vercel_auth_protection": "all_except_custom_domains"
-  },
-  "github": {
-    "connected_login": "eslamtiger",
-    "repository_created": true,
-    "repository_url": "https://github.com/eslamtiger/rawnaq-after-led",
-    "write_access_verified": true,
-    "source_upload_status": "in_progress"
+    "source_of_truth": true,
+    "rls_enabled": true,
+    "anonymous_access": "Explicit expiring QA membership only; no public enrollment",
+    "new_migrations": [
+      "20261104170848_v02_core_pilot_model_and_shared_team",
+      "20261104171326_v02_activity_recorded_and_occurred_history",
+      "20261104171438_v02_contact_occurrence_timestamp"
+    ]
   },
   "verification": {
-    "local_tests_passed": 15,
-    "build": "passed",
-    "database_engine": "PGlite PostgreSQL, isolated Auth test schema",
-    "browser": "unconfigured login screen inspected at managed preview",
-    "live_end_to_end": false,
-    "mobile_visual_qa": false,
-    "latest_resume_checks": {
-      "syntax": "passed",
-      "domain_tests_passed": 6,
-      "full_suite_rerun": false
-    },
-    "live_database_workflow": "passed; test records rolled back; no Auth login tested",
-    "local_dependency_install": "offline cache missing packages; full suite/build not rerun in resumed workspace",
-    "security_advisor": "12 intentional authenticated SECURITY DEFINER RPC warnings; membership/ownership/admin checks verified. Internal helper grants revoked; no anonymous definer RPC execution.",
-    "performance_advisor": "Only unused-index informational notices on new empty database.",
-    "latest_remote_build": "Vercel build passed with npm ci and npm run build",
-    "http_page_fetch": "Vercel web-fetch failed to locate/access deployment; no browser verification completed"
-  }
+    "local_tests_passed": 18,
+    "live_workflow_assertions": 25,
+    "live_access_assertions": 9,
+    "live_metric_export_assertions": 3,
+    "failed": [],
+    "reports": [
+      "docs/v02-live-test-results.json",
+      "docs/v02-access-test-results.json",
+      "docs/v02-live-metrics-results.json"
+    ]
+  },
+  "deployment": "See Vercel deployment Git metadata and final delivery report for exact tested commit/Preview URL; preserve original QA deployment.",
+  "production_data_authorized": false
 }
