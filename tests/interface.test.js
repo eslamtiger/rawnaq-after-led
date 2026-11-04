@@ -162,5 +162,11 @@ test("Arabic interface: navigation, empty data, profile and validated save forms
   assert.equal(calls[1][1].expected, 1);
   click('[data-page="settings"]');
   assert.ok(w.document.body.textContent.includes("فريق العمل"));
+  fixture.profiles = [];
+  authHandler("SIGNED_IN", { user: { id: own } });
+  await tick();
+  await tick();
+  assert.ok(w.document.body.textContent.includes(own));
+  assert.ok(!w.document.body.textContent.includes("${esc("));
   await w.happyDOM.close();
 });
