@@ -4,7 +4,7 @@ Continue the existing branch `fix/rawnaq-v0-2-core-pilot`; do not rebuild or swi
 
 Implemented source: independent lifecycle/qualification/temperature; booking-offered milestone; NO_SHOW and recovery; Supabase persistence; strict Cairo dates and concurrency; structured activity timeline; preserved notes/linked appointments; operational queues/views; dashboard; conditional forms; identity correction; full JSON export; minimum text readability.
 
-Actual acceptance has passed in Supabase project `uucdnakounzqeqwkzfel`: see `v02-live-test-results.json`, `v02-access-test-results.json` and `v02-live-metrics-results.json`. These are actual HTTPS tests using two independent anonymous identities, explicitly enrolled for 48 hours. No service-role browser key, open enrollment or disabled RLS. Local full suite: 18 passed.
+Actual acceptance has passed in Supabase project `uucdnakounzqeqwkzfel`: see `v02-live-test-results.json`, `v02-access-test-results.json` and `v02-live-metrics-results.json`. These are actual HTTPS tests using two independent anonymous identities, explicitly enrolled for 48 hours. No service-role browser key, open enrollment or disabled RLS. Local full suite: 20 passed.
 
 Canonical migration files include all applied V0.2 changes; original initial-file/server-version mapping is documented in README. New migrations were applied only after rechecking zero operational leads/appointments/activities. Synthetic QA records now exist; do not assume the database is empty again. Keep history and migration records intact.
 

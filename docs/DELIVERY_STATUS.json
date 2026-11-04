@@ -14,7 +14,7 @@
     ]
   },
   "verification": {
-    "local_tests_passed": 18,
+    "local_tests_passed": 20,
     "live_workflow_assertions": 25,
     "live_access_assertions": 9,
     "live_metric_export_assertions": 3,

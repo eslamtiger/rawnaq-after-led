@@ -43,3 +43,5 @@ Overdue means next_at < now, including earlier today. Today means remaining acti
 Admin full JSON export includes schema version, export time, timezone, leads, appointments, activities, QA reviews, profiles and configuration with stable IDs/relationships. This is separate from the management CSV. It excludes authentication credentials and is not an Auth-user backup. Auth accounts need independent provisioning when restoring to another Supabase project. No restore UI is included.
 
 Source and lockfile are committed to the existing V0.2 branch. Public connection values and the Preview QA flag are deployment environment variables; no service-role credentials are used in frontend or acceptance tests. The tested Preview must identify its Git commit; the old QA deployment must remain unchanged.
+
+Anonymous QA tabs use separate Auth storage/broadcast keys so concurrent tabs retain independent identities across refresh. This does not change operational Supabase storage or production authentication.

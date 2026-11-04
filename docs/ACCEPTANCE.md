@@ -8,7 +8,7 @@ Negative tests cover missing/stale revision, duplicate corrected contact, imposs
 
 Actual-data dashboard cohort: 6 unique leads, 4 ever booked, 3 attended, 1 ever no-show, 2 lost, 1 active; 6 appointment records after no-show/rebook and reschedule. JSON round-trip preserves lead/appointment/activity/profile relationships.
 
-`npm test`: 18 tests passed, zero failed. Includes historical V0.1 regression (explicitly labelled), V0.2 migration-chain workflow tests, calendar/DST, metrics/queue and DOM conditional-form tests. Those isolated tests are not presented as live acceptance.
+`npm test`: 20 tests passed, zero failed. Includes historical V0.1 regression (explicitly labelled), V0.2 migration-chain workflow tests, calendar/DST, metrics/queue and DOM conditional-form tests. Those isolated tests are not presented as live acceptance.
 
 Known intentional boundaries: synthetic data only; production authorization, integrations and redesign remain outside this QA release. Expiring anonymous enrollment is not a production login model. Security advisors retain intentional authenticated SECURITY DEFINER RPC warnings, temporary-anonymous policy warnings, and pre-existing disabled leaked-password protection. These must not be reported as a clean production security audit.
 

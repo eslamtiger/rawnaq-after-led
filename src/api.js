@@ -2,10 +2,20 @@ import { createClient } from "@supabase/supabase-js";
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 export const configured = Boolean(url && key);
+export const qaAnonymous = import.meta.env.VITE_QA_ANONYMOUS === "true";
+// Supabase broadcasts Auth events by storageKey. QA tabs must not replace
+// each other's anonymous identity. window.name survives refresh per tab;
+// sessionStorage stores only that tab's authentication, never CRM records.
+const qaStorageKey = qaAnonymous
+  ? window.name.startsWith("rawnaq-qa-")
+    ? window.name
+    : (window.name = "rawnaq-qa-" + crypto.randomUUID())
+  : null;
 export const db = configured
   ? createClient(url, key, {
       auth: {
         storage: window.sessionStorage,
+        ...(qaStorageKey ? { storageKey: qaStorageKey } : {}),
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
@@ -62,5 +72,3 @@ export async function loadWorkspace() {
     ]);
   return { leads, appointments, activities, profiles, config, qa };
 }
-
-export const qaAnonymous = import.meta.env.VITE_QA_ANONYMOUS === "true";
