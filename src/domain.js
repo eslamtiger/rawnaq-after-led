@@ -176,14 +176,14 @@ export function metrics(leads, appointments, now = Date.now()) {
       (l) =>
         !TERMINAL.includes(l.stage) &&
         l.next_at &&
+        Date.parse(l.next_at) >= now &&
         cairoDay(l.next_at) === cairoDay(now),
     ).length,
     overdue: leads.filter(
       (l) =>
         !TERMINAL.includes(l.stage) &&
         l.next_at &&
-        Date.parse(l.next_at) < now &&
-        cairoDay(l.next_at) !== cairoDay(now),
+        Date.parse(l.next_at) < now,
     ).length,
   };
 }

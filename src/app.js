@@ -557,7 +557,7 @@ function contactModal(l) {
         `<textarea id="body" name="body" required maxlength="3000" rows="4" placeholder="سجلي ما اتقال والخطوة المتفق عليها"></textarea>`,
         true,
       ) +
-      nextFields(l),
+      nextFields({ ...l, next_action: l.first_response_at ? l.next_action : "discovery" }),
     (f) =>
       rpc("record_contact", {
         lid: l.id,
