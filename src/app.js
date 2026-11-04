@@ -212,7 +212,7 @@ function today() {
       (a) => cairoDay(a.starts_at) === cairoDay() && a.status !== "cancelled",
     ),
     q = queue(data.leads);
-  return `${heading(formatDate(new Date(), false), `يوم جديد، واهتمام مستمر`, `${esc(me.display_name)}، دي الخطوات اللي محتاجة متابعتك النهارده.`, addButton())}<section class="stats">${stat("استفسارات بدون رد", number(m.unanswered), "تحتاج أول تواصل", m.unanswered ? "urgent" : "")}${stat("متابعات اليوم", number(m.today), "كل عميلة بخطوة واضحة")}${stat("متابعات من أيام سابقة", number(m.overdue), "ابدئي بالأقدم", m.overdue ? "urgent" : "")}${stat("حجوزات اليوم", number(todayApps.length), "راجعي التأكيد والحضور", "highlight")}</section><div class="today-grid"><section class="panel"><div class="panel-head"><div><h2>أولوية المتابعة</h2><p>الاستفسارات الجديدة، ثم المتأخر، ثم الجاهزات للحجز</p></div><span class="count">${number(q.length)}</span></div>${
+  return `${heading(formatDate(new Date(), false), `يوم جديد، واهتمام مستمر`, `${esc(me.display_name)}، دي الخطوات اللي محتاجة متابعتك النهارده.`, addButton())}<section class="stats">${stat("استفسارات بدون رد", number(m.unanswered), "تحتاج أول تواصل", m.unanswered ? "urgent" : "")}${stat("متابعات اليوم", number(m.today), "كل عميلة بخطوة واضحة")}${stat("متابعات متأخرة", number(m.overdue), "موعدها عدى؛ يشمل النهارده", m.overdue ? "urgent" : "")}${stat("حجوزات اليوم", number(todayApps.length), "راجعي التأكيد والحضور", "highlight")}</section><div class="today-grid"><section class="panel"><div class="panel-head"><div><h2>أولوية المتابعة</h2><p>الاستفسارات الجديدة، ثم المتأخر، ثم الجاهزات للحجز</p></div><span class="count">${number(q.length)}</span></div>${
     q.length
       ? q
           .slice(0, 10)
@@ -328,7 +328,7 @@ function appointmentsView() {
   const apps = data.appointments
     .filter((a) => ids.has(a.lead_id) && appointmentMatches(a, appointmentView))
     .sort((a, b) =>
-      appointmentView === "past"
+      ["past", "attended", "no_show", "rescheduled"].includes(appointmentView)
         ? Date.parse(b.starts_at) - Date.parse(a.starts_at)
         : Date.parse(a.starts_at) - Date.parse(b.starts_at),
     );
