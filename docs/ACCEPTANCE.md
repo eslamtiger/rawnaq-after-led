@@ -13,3 +13,10 @@ Actual-data dashboard cohort: 6 unique leads, 4 ever booked, 3 attended, 1 ever 
 Known intentional boundaries: synthetic data only; production authorization, integrations and redesign remain outside this QA release. Expiring anonymous enrollment is not a production login model. Security advisors retain intentional authenticated SECURITY DEFINER RPC warnings, temporary-anonymous policy warnings, and pre-existing disabled leaked-password protection. These must not be reported as a clean production security audit.
 
 Preview verification and exact commit are recorded separately after deployment. The original QA deployment is preserved.
+
+---
+# V0.3 acceptance status — 2026-11-05
+
+Tested (local, dependency-free): `node --check src/*.js`; `node --test tests/assistant.test.js tests/domain.test.js` — temperature rules, manual override, last contact, journey stage, reply picking, template filling, checklist generation/keys/progress, brief. New SQL (migration) run on a throwaway PostgreSQL 16 with an auth shim (not real Supabase).
+
+NOT tested: `npm ci`/`npm run build`/full `npm test` (npm registry blocked in the build environment); DOM/pglite tests; migration and seed on the real Supabase project; 375px visual check and the 20-second add-lead target on a real phone; live staff login; public intake (not implemented). Do not report these as passed.

@@ -251,3 +251,130 @@ export function appointmentMatches(a, view, now = Date.now()) {
   if (view === "booked") return ["scheduled", "confirmed"].includes(a.status);
   return view === "all" || a.status === view;
 }
+
+// ---------------------------------------------------------------------------
+// Temperature (Hot / Warm / Cold). Pure and rule based; no AI, no I/O.
+// Rules follow "ronaq-reply-library-and-dynamic-checklist.md" section 1.
+// `lead.grade` is the staff member's manual override: null means automatic.
+// ---------------------------------------------------------------------------
+const HOUR = 3600000;
+const DAY = 24 * HOUR;
+export const HOT_SOURCES = ["src_referral", "src_walkin"];
+
+// Latest logged contact per lead (plus how many were logged), one pass over the
+// activities timeline. Returns Map(leadId -> { at, outcome, summary, first_reply, count }).
+export function lastContactsByLead(activities) {
+  const map = new Map();
+  for (const a of activities || []) {
+    if (a.kind !== "contact") continue;
+    const at = Date.parse(a.details?.contact_at || a.created_at);
+    if (!Number.isFinite(at)) continue;
+    const prev = map.get(a.lead_id);
+    const count = (prev?.count || 0) + 1;
+    if (!prev || at > prev.at)
+      map.set(a.lead_id, {
+        at,
+        outcome: a.details?.outcome || null,
+        summary: a.body || "",
+        first_reply: a.details?.first_reply === true,
+        count,
+      });
+    else prev.count = count;
+  }
+  return map;
+}
+export const lastContactOf = (activities, leadId) =>
+  lastContactsByLead(activities).get(leadId) || null;
+
+// ctx: { lastContact, appointments, askedBooking }
+// `askedBooking` is optional: the system does not record it yet, so callers
+// leave it undefined and the "asked about booking" rule simply never fires.
+// Returns { temp: "hot"|"warm"|"cold"|null, state, reasons[] }. `state` marks
+// leads that left the temperature system: previsit | after_visit | reactivation.
+export function computeTemperature(lead, ctx = {}, now = Date.now()) {
+  const reasons = [];
+  const result = (temp, state = null) => ({ temp, state, reasons });
+  if (lead.stage === "lost") {
+    reasons.push("closed_lost");
+    return result("cold", "reactivation");
+  }
+  if (lead.stage === "attended") {
+    reasons.push("attended");
+    return result(null, "after_visit");
+  }
+  const hasAppointment = (ctx.appointments || []).some(
+    (a) =>
+      a.lead_id === lead.id && ["scheduled", "confirmed"].includes(a.status),
+  );
+  if (lead.stage === "booked" && hasAppointment) {
+    reasons.push("appointment_set");
+    return result(null, "previsit");
+  }
+  const contact = ctx.lastContact || null;
+  const outcome = lead.last_outcome || contact?.outcome || null;
+  if (outcome === "refused") {
+    reasons.push("refused");
+    return result("cold", "reactivation");
+  }
+  const received = Date.parse(lead.received_at);
+  const anchor = Number.isFinite(contact?.at) ? contact.at : null;
+  const quietHours = anchor === null ? 0 : (now - anchor) / HOUR;
+  const ageDays = Number.isFinite(received) ? (now - received) / DAY : 0;
+  const objection = Boolean(lead.objection_id);
+  const engaged = outcome === "interested" || outcome === "information";
+  const offered = Boolean(lead.booking_offered_at);
+  let temp = null;
+  if (outcome === "no_answer" || outcome === "later") {
+    temp = "cold";
+    reasons.push("outcome_" + outcome);
+  } else {
+    const hotSignals = [];
+    if (ctx.askedBooking === true) hotSignals.push("asked_booking");
+    if ((offered || lead.stage === "follow_up") && outcome === "interested")
+      hotSignals.push("offered_and_interested");
+    if (outcome === "interested" && anchor !== null && quietHours <= 24)
+      hotSignals.push("interested_last_24h");
+    if (HOT_SOURCES.includes(lead.source_id)) hotSignals.push("hot_source");
+    if (hotSignals.length && !objection) {
+      temp = "hot";
+      reasons.push(...hotSignals);
+    } else {
+      if (hotSignals.length) reasons.push("objection_blocks_hot");
+      if (engaged || (anchor !== null && quietHours <= 72)) {
+        temp = "warm";
+        reasons.push(engaged ? "engaged" : "replied_last_3_days");
+        if (objection) reasons.push("objection_still_talking");
+      } else if (objection && hotSignals.length) {
+        temp = "warm";
+        reasons.push("objection_still_talking");
+      }
+    }
+  }
+  // Silence lowers the temperature one level after 72 hours.
+  if (anchor !== null && quietHours >= 72 && temp && temp !== "cold") {
+    temp = temp === "hot" ? "warm" : "cold";
+    reasons.push("quiet_72h");
+  } else if (anchor !== null && quietHours >= 72 && temp === null) {
+    temp = "cold";
+    reasons.push("quiet_72h");
+  }
+  // Old leads that never booked are cold.
+  if (ageDays > 7 && !lead.first_booked_at && temp !== "cold") {
+    temp = "cold";
+    reasons.push("stale_7d");
+  }
+  return result(temp);
+}
+
+// Effective temperature: the staff override wins; otherwise the computed one.
+export function effectiveTemperature(lead, ctx = {}, now = Date.now()) {
+  const computed = computeTemperature(lead, ctx, now);
+  const manual = Object.hasOwn(GRADES, lead.grade) ? lead.grade : null;
+  return {
+    temp: manual || computed.temp,
+    mode: manual ? "manual" : "auto",
+    suggested: computed.temp,
+    state: computed.state,
+    reasons: computed.reasons,
+  };
+}

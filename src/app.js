@@ -32,7 +32,24 @@ import {
   metrics,
   qaScore,
   safeCSV,
+  effectiveTemperature,
+  lastContactsByLead,
 } from "./domain.js";
+import {
+  REPLY_STATES,
+  JOURNEY_LABELS,
+  journeyStage,
+  defaultReplyState,
+  pickReplies,
+  fillTemplate,
+  buildChecklist,
+  checklistKey,
+  checklistProgress,
+  savedChecklist,
+  leadBrief,
+  tagsOf,
+  REASON_LABELS,
+} from "./assistant.js";
 const root = document.querySelector("#app");
 let session = null,
   me = null,
@@ -57,9 +74,14 @@ let session = null,
   pageIndex = 0,
   loading = false,
   mutation = false,
-  refreshTimer;
+  refreshTimer,
+  todayView = "list",
+  contacts = new Map(),
+  replyChoice = {},
+  localChecks = new Map(),
+  training = readTraining();
 const nav = [
-  ["today", "اليوم", "sun"],
+  ["today", "متابعات اليوم", "sun"],
   ["leads", "العميلات المحتملات", "users"],
   ["followups", "المتابعات", "clock"],
   ["appointments", "الحجوزات", "calendar"],
@@ -68,6 +90,31 @@ const nav = [
   ["qa", "الجودة والتدريب", "check"],
   ["settings", "الإعدادات", "settings"],
 ];
+// Bottom bar (phones): the four daily screens plus a "more" page.
+const bottomNav = [
+  ["today", "اليوم", "sun"],
+  ["leads", "العميلات", "users"],
+  ["appointments", "الحجوزات", "calendar"],
+  ["dashboard", "اللوحة", "chart"],
+  ["more", "المزيد", "menu"],
+];
+const routes = [...nav.map((n) => n[0]), "more"];
+// UI preference only (never CRM data): training notes on/off for this browser.
+function readTraining() {
+  try {
+    return localStorage.getItem("rawnaq-training") !== "0";
+  } catch {
+    return true;
+  }
+}
+function setTraining(on) {
+  training = on;
+  try {
+    localStorage.setItem("rawnaq-training", on ? "1" : "0");
+  } catch {
+    /* preference simply is not remembered */
+  }
+}
 const icons = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
   users:
@@ -89,6 +136,11 @@ const icons = {
   close: '<path d="m6 6 12 12M6 18 18 6"/>',
   phone:
     '<path d="M5 3h4l2 5-3 2c2 4 2 4 6 6l2-3 5 2v4c0 4-8 1-12-3S1 3 5 3Z"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  board:
+    '<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="10" rx="1"/><rect x="17" y="4" width="4" height="13" rx="1"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
 };
 const icon = (n) =>
   `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[n] || icons.check}</svg>`;
@@ -127,6 +179,27 @@ const peopleOptions = (value) =>
   );
 const badge = (l) =>
   `<span class="badge ${l.stage === "lost" ? "red" : l.stage === "attended" ? "green" : l.stage === "booked" ? "gold" : ""}">${STAGES[l.stage]}</span>`;
+let apptsByLead = new Map();
+function indexData() {
+  contacts = lastContactsByLead(data.activities);
+  apptsByLead = new Map();
+  for (const a of data.appointments) {
+    if (!apptsByLead.has(a.lead_id)) apptsByLead.set(a.lead_id, []);
+    apptsByLead.get(a.lead_id).push(a);
+  }
+}
+const tempOf = (l) =>
+  effectiveTemperature(l, {
+    lastContact: contacts.get(l.id) || null,
+    appointments: apptsByLead.get(l.id) || [],
+  });
+const tempBadge = (l) => {
+  const t = tempOf(l);
+  if (t.state === "previsit")
+    return '<span class="temp previsit">قبل الزيارة</span>';
+  if (!t.temp) return "";
+  return `<span class="temp ${t.temp}">${GRADES[t.temp]}${t.mode === "manual" ? " · يدوي" : ""}</span>`;
+};
 const field = (name, title, html, wide = false) =>
   `<label class="field ${wide ? "wide" : ""}" for="${name}"><span>${title}</span>${html}</label>`;
 const input = (n, t = "text", v = "", req = false, extra = "") =>
@@ -191,7 +264,8 @@ async function refresh() {
   }
 }
 function render() {
-  root.innerHTML = `<div class="workspace"><aside class="sidebar"><a class="wordmark" href="#today">رونق<span>RAWNAQ</span></a><div class="sidebar-caption">متابعة العميلات</div><nav aria-label="التنقل الرئيسي">${nav.map(([id, title, i]) => `<button data-page="${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><span class="avatar">${esc(me.display_name.charAt(0))}</span><div><strong>${esc(me.display_name)}</strong><small>${me.role === "admin" ? "إدارة المركز" : "موظفة المبيعات"}</small></div><button class="icon-button" data-act="logout" aria-label="تسجيل الخروج">${icon("logout")}</button></div></aside><div class="main"><header class="topbar"><div class="breadcrumb">رونق <span>/</span> ${nav.find((n) => n[0] === page)?.[1]}</div><div class="top-actions"><span class="connection"><i></i> متصل</span><button class="icon-button" data-act="refresh" aria-label="تحديث البيانات">${icon("refresh")}</button></div></header><main class="content">${selected ? profileView() : pageView()}</main><footer>توقيت القاهرة · ${session.user.is_anonymous ? "اختبار QA مؤقت — بيانات وهمية فقط · " : ""}البيانات حسب صلاحيات حسابك <span>رونق — متابعة باهتمام</span></footer></div></div><dialog id="modal" aria-labelledby="modal-title"></dialog>`;
+  indexData();
+  root.innerHTML = `<div class="workspace"><aside class="sidebar"><a class="wordmark" href="#today">رونق<span>RAWNAQ</span></a><div class="sidebar-caption">متابعة العميلات</div><nav aria-label="التنقل الرئيسي">${nav.map(([id, title, i]) => `<button data-page="${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><span class="avatar">${esc(me.display_name.charAt(0))}</span><div><strong>${esc(me.display_name)}</strong><small>${me.role === "admin" ? "إدارة المركز" : "موظفة المبيعات"}</small></div><button class="icon-button" data-act="logout" aria-label="تسجيل الخروج">${icon("logout")}</button></div></aside><div class="main"><header class="topbar"><div class="breadcrumb">رونق <span>/</span> ${nav.find((n) => n[0] === page)?.[1] ?? "المزيد"}</div><div class="top-actions"><span class="connection"><i></i> متصل</span><button class="icon-button" data-act="refresh" aria-label="تحديث البيانات">${icon("refresh")}</button></div></header><main class="content">${selected ? profileView() : pageView()}</main><footer>توقيت القاهرة · ${session.user.is_anonymous ? "اختبار QA مؤقت — بيانات وهمية فقط · " : ""}البيانات حسب صلاحيات حسابك <span>رونق — متابعة باهتمام</span></footer></div>${!selected && ["today", "leads", "followups"].includes(page) ? `<button class="fab" data-act="add" aria-label="تسجيل عميلة جديدة">${icon("plus")}<span>عميلة جديدة</span></button>` : ""}<nav class="bottom-nav" aria-label="التنقل السفلي">${bottomNav.map(([id, title, i]) => `<button data-page="${id}" class="${page === id || (id === "more" && ["scripts", "qa", "settings"].includes(page)) ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" && queue(data.leads).length ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav></div><dialog id="modal" aria-labelledby="modal-title"></dialog>`;
   bind();
 }
 function heading(k, title, sub, action = "") {
@@ -209,25 +283,63 @@ function pageView() {
   if (page === "dashboard") return dashboard();
   if (page === "scripts") return scripts();
   if (page === "qa") return quality();
+  if (page === "more") return morePage();
   return settings();
 }
+function morePage() {
+  const items = [
+    ["followups", "المتابعات", "كل المتابعات: متأخر واليوم والقادم", "clock"],
+    ["scripts", "دليل التواصل", "القوالب والردود على الاعتراضات", "book"],
+    ["qa", "الجودة والتدريب", "مراجعات التواصل ومعايير الجودة", "check"],
+    ["settings", "الإعدادات", "المصادر والقوالب وفريق العمل", "settings"],
+  ];
+  return `${heading("كل الأقسام", "المزيد", "باقي أقسام رونق.")}<section class="panel more-list">${items.map(([id, t, s, i]) => `<button class="more-item" data-page="${id}">${icon(i)}<span><strong>${t}</strong><small>${s}</small></span>${icon("arrow")}</button>`).join("")}<button class="more-item" data-act="logout">${icon("logout")}<span><strong>تسجيل الخروج</strong><small>${esc(me.display_name)}</small></span></button></section>`;
+}
+function byUrgency(now) {
+  return (a, b) =>
+    priority(a, now) - priority(b, now) ||
+    (Date.parse(a.next_at) || Infinity) - (Date.parse(b.next_at) || Infinity);
+}
+function kanCard(l) {
+  const late =
+    l.next_at && Date.parse(l.next_at) < Date.now() && !TERMINAL.includes(l.stage);
+  return `<button class="kan-card ${late ? "late" : ""}" data-open="${l.id}"><strong>${esc(l.name)}</strong>${tempBadge(l)}<small>${esc(label(l.service_id))} · ${esc(person(l.owner_id))}</small><span class="kan-next">${!l.first_response_at ? "في انتظار أول رد" : esc(ACTIONS[l.next_action] || "—")}${l.next_at ? " · " + formatDate(l.next_at) : ""}</span></button>`;
+}
+function kanban() {
+  const now = Date.now();
+  return `<div class="kanban" role="list" aria-label="عرض اللوحة حسب الحالة">${["new", "active", "follow_up", "booked", "no_show"]
+    .map((st) => {
+      const ls = data.leads.filter((l) => l.stage === st).sort(byUrgency(now));
+      return `<section class="kan-col" role="listitem"><header><h3>${STAGES[st]}</h3><span class="count">${number(ls.length)}</span></header>${ls.length ? ls.slice(0, 30).map(kanCard).join("") : '<p class="kan-empty">لا توجد عميلات</p>'}${ls.length > 30 ? `<p class="kan-empty">و${number(ls.length - 30)} أخرى في قائمة العميلات</p>` : ""}</section>`;
+    })
+    .join("")}</div>`;
+}
 function today() {
-  const m = metrics(data.leads, data.appointments),
+  const now = Date.now(),
+    m = metrics(data.leads, data.appointments, now),
     todayApps = data.appointments.filter(
       (a) => cairoDay(a.starts_at) === cairoDay() && a.status !== "cancelled",
     ),
-    q = queue(data.leads);
-  return `${heading(formatDate(new Date(), false), `يوم جديد، واهتمام مستمر`, `${esc(me.display_name)}، دي الخطوات اللي محتاجة متابعتك النهارده.`, addButton())}<section class="stats">${stat("استفسارات بدون رد", number(m.unanswered), "تحتاج أول تواصل", m.unanswered ? "urgent" : "")}${stat("متابعات اليوم", number(m.today), "كل عميلة بخطوة واضحة")}${stat("متابعات متأخرة", number(m.overdue), "موعدها عدى؛ يشمل النهارده", m.overdue ? "urgent" : "")}${stat("حجوزات اليوم", number(todayApps.length), "راجعي التأكيد والحضور", "highlight")}</section><div class="today-grid"><section class="panel"><div class="panel-head"><div><h2>أولوية المتابعة</h2><p>الاستفسارات الجديدة، ثم المتأخر، ثم الجاهزات للحجز</p></div><span class="count">${number(q.length)}</span></div>${
-    q.length
-      ? q
-          .slice(0, 10)
+    q = queue(data.leads, now),
+    late = q.filter((l) => priority(l, now) <= 1),
+    rest = q.filter((l) => priority(l, now) >= 2),
+    toggle = `<div class="view-toggle" role="group" aria-label="طريقة العرض"><button data-today-view="list" aria-pressed="${todayView === "list"}" class="${todayView === "list" ? "primary" : ""}">${icon("list")} قائمة</button><button data-today-view="kanban" aria-pressed="${todayView === "kanban"}" class="${todayView === "kanban" ? "primary" : ""}">${icon("board")} لوحة</button></div>`;
+  const lists = `<section class="panel overdue-panel ${late.length ? "has-late" : ""}"><div class="panel-head"><div><h2>متأخر — ابدئي من هنا</h2><p>استفسارات بدون رد ومتابعات موعدها عدى</p></div><span class="count">${number(late.length)}</span></div>${
+    late.length
+      ? late
+          .slice(0, 15)
           .map((l) => leadRow(l, true))
           .join("")
-      : blank(
-          "كل الخطوات تحت المتابعة",
-          "لا توجد مهام عاجلة ظاهرة حاليًا. راجعي قائمة العميلات عند الحاجة.",
-        )
-  }<button class="text-button panel-link" data-page="followups">كل المتابعات ${icon("arrow")}</button></section><aside class="side-stack"><section class="panel appointment-mini"><div class="panel-head"><h2>مواعيد النهارده</h2>${icon("calendar")}</div>${
+      : blank("لا يوجد متأخر", "كل المتابعات في وقتها.")
+  }</section><section class="panel"><div class="panel-head"><div><h2>النهارده</h2><p>المتبقي من متابعات اليوم والجاهزات للحجز</p></div><span class="count">${number(rest.length)}</span></div>${
+    rest.length
+      ? rest
+          .slice(0, 15)
+          .map((l) => leadRow(l, true))
+          .join("")
+      : blank("لا توجد متابعات أخرى اليوم", "راجعي قائمة العميلات عند الحاجة.")
+  }<button class="text-button panel-link" data-page="followups">كل المتابعات ${icon("arrow")}</button></section>`;
+  const appts = `<section class="panel appointment-mini"><div class="panel-head"><h2>مواعيد النهارده</h2>${icon("calendar")}</div>${
     todayApps.length
       ? todayApps
           .slice(0, 5)
@@ -237,7 +349,12 @@ function today() {
           )
           .join("")
       : blank("لا توجد مواعيد اليوم", "الحجوزات المسجلة هتظهر هنا تلقائيًا.")
-  }</section><section class="tip"><div class="tip-label">من دليل رونق ${icon("book")}</div><h3>ابدئي بالفهم، قبل عرض الحجز.</h3><p>«إيه الهدف اللي تحبي توصلي له؟»</p><button class="text-button" data-page="scripts">افتحي دليل التواصل ${icon("arrow")}</button></section></aside></div>`;
+  }</section>`;
+  return `${heading(formatDate(new Date(), false), "متابعات اليوم", `${esc(me.display_name)}، المتأخر أولًا ثم متابعات النهارده.`, addButton())}<div class="today-bar">${toggle}<span class="today-counts"><b class="${m.overdue + m.unanswered ? "late" : ""}">${number(m.overdue + m.unanswered)}</b> متأخر · <b>${number(m.today)}</b> النهارده · <b>${number(todayApps.length)}</b> موعد</span></div>${
+    todayView === "kanban"
+      ? kanban()
+      : `<div class="today-grid"><div class="today-main">${lists}</div><aside class="side-stack">${appts}</aside></div>`
+  }`;
 }
 function leadRow(l, compact = false) {
   const p = priority(l),
@@ -245,7 +362,7 @@ function leadRow(l, compact = false) {
       l.next_at &&
       Date.parse(l.next_at) < Date.now() &&
       !TERMINAL.includes(l.stage);
-  return `<button class="lead-row ${compact ? "compact" : ""}" data-open="${l.id}"><span class="avatar pale">${esc(l.name.charAt(0))}</span><div class="lead-main"><div><strong>${esc(l.name)}</strong>${badge(l)}</div><small>${esc(label(l.service_id))} · ${esc(person(l.owner_id))}</small></div><div class="next ${late ? "late" : ""}"><strong>${!l.first_response_at && !TERMINAL.includes(l.stage) ? "في انتظار أول رد" : ACTIONS[l.next_action] || "الملف مغلق"}</strong><small>${l.next_at ? formatDate(l.next_at) : "—"}</small></div>${compact && p === 0 ? '<span class="dot urgent-dot"></span>' : icon("arrow")}</button>`;
+  return `<button class="lead-row ${compact ? "compact" : ""}" data-open="${l.id}"><span class="avatar pale">${esc(l.name.charAt(0))}</span><div class="lead-main"><div><strong>${esc(l.name)}</strong>${badge(l)}${tempBadge(l)}</div><small>${esc(label(l.service_id))} · ${esc(label(l.source_id))} · ${esc(person(l.owner_id))}</small></div><div class="next ${late ? "late" : ""}"><strong>${!l.first_response_at && !TERMINAL.includes(l.stage) ? "في انتظار أول رد" : ACTIONS[l.next_action] || "الملف مغلق"}</strong><small>${l.next_at ? formatDate(l.next_at) : "—"}</small></div>${compact && p === 0 ? '<span class="dot urgent-dot"></span>' : icon("arrow")}</button>`;
 }
 function filters(includeDate = false) {
   return `<div class="filters"><label class="search">${icon("search")}<input name="search" id="search" aria-label="بحث بالاسم أو رقم التواصل" placeholder="ابحثي بالاسم أو رقم التواصل" value="${esc(search)}"></label><select id="filter-stage" aria-label="تصفية حسب الحالة">${options(STAGES, filterStage, "كل الحالات")}</select>${me.role === "admin" ? `<select id="filter-owner" aria-label="تصفية حسب الموظفة">${options(Object.fromEntries(data.profiles.map((p) => [p.id, p.display_name])), filterOwner, "كل الموظفات")}</select>` : ""}<select id="filter-source" aria-label="تصفية حسب المصدر">${configOptions("source", filterSource, "كل المصادر")}</select>${includeDate ? `<label class="date-filter">من ${input("range-from", "date", rangeFrom)}</label><label class="date-filter">إلى ${input("range-to", "date", rangeTo)}</label>` : ""}</div>`;
@@ -301,10 +418,10 @@ function profileView() {
       .filter((a) => a.lead_id === l.id)
       .sort((a, b) => Date.parse(b.starts_at) - Date.parse(a.starts_at)),
     history = data.activities
-      .filter((a) => a.lead_id === l.id)
+      .filter((a) => a.lead_id === l.id && a.kind !== "checklist")
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
     closed = TERMINAL.includes(l.stage);
-  return `<button class="text-button back" data-act="back">→ رجوع للقائمة</button>${heading("ملف العميلة", esc(l.name), `${esc(label(l.service_id))} · ${esc(label(l.source_id))}`, badge(l))}<div class="profile-grid"><section class="profile-main"><section class="panel"><div class="panel-head"><h2>الخطوة القادمة</h2>${!closed ? `<button class="text-button" data-act="edit">تحديث البيانات</button>` : ""}</div><div class="action-box ${l.next_at && Date.parse(l.next_at) < Date.now() ? "overdue" : ""}"><div>${icon("clock")}<h3>${ACTIONS[l.next_action] || "الملف مغلق"}</h3></div><p>${l.next_at ? formatDate(l.next_at) : "لا توجد متابعة مفتوحة"}</p><small>${esc(l.need) || "ملخص الاحتياج لم يُسجل بعد."}</small></div><div class="profile-actions">${closed ? '<button class="primary" data-act="reopen">إعادة فتح الملف</button>' : `<button class="primary" data-act="contact">تسجيل تواصل</button><button data-act="edit">تحديث الحالة</button><button data-act="book">${icon("calendar")} ${l.stage === "no_show" ? "إعادة الحجز" : "تثبيت حجز"}</button>${l.stage === "no_show" ? `<button data-act="recover-followup">متابعة</button><button data-act="recover-lost">إغلاق كـ Lost</button>` : ""}${!l.booking_offered_at ? `<button data-act="offer">تم عرض الحجز</button>` : `<span class="badge">عُرض الحجز ${formatDate(l.booking_offered_at)}</span>`}`}</div></section><section class="panel"><div class="panel-head"><h2>الحجوزات</h2><span class="count">${number(apps.length)}</span></div>${
+  return `<button class="text-button back" data-act="back">→ رجوع للقائمة</button>${heading("ملف العميلة", esc(l.name), `${esc(label(l.service_id))} · ${esc(label(l.source_id))}`, badge(l))}${briefHtml(l)}<div class="profile-grid"><section class="profile-main"><section class="panel"><div class="panel-head"><h2>الخطوة القادمة</h2>${!closed ? `<button class="text-button" data-act="edit">تحديث البيانات</button>` : ""}</div><div class="action-box ${l.next_at && Date.parse(l.next_at) < Date.now() ? "overdue" : ""}"><div>${icon("clock")}<h3>${ACTIONS[l.next_action] || "الملف مغلق"}</h3></div><p>${l.next_at ? formatDate(l.next_at) : "لا توجد متابعة مفتوحة"}</p><small>${esc(l.need) || "ملخص الاحتياج لم يُسجل بعد."}</small></div><div class="profile-actions">${closed ? '<button class="primary" data-act="reopen">إعادة فتح الملف</button>' : `<button class="primary" data-act="contact">تسجيل تواصل</button><button data-act="edit">تحديث الحالة</button><button data-act="book">${icon("calendar")} ${l.stage === "no_show" ? "إعادة الحجز" : "تثبيت حجز"}</button>${l.stage === "no_show" ? `<button data-act="recover-followup">متابعة</button><button data-act="recover-lost">إغلاق كـ Lost</button>` : ""}${!l.booking_offered_at ? `<button data-act="offer">تم عرض الحجز</button>` : `<span class="badge">عُرض الحجز ${formatDate(l.booking_offered_at)}</span>`}`}</div></section>${repliesPanel(l)}${checklistPanel(l)}<section class="panel"><div class="panel-head"><h2>الحجوزات</h2><span class="count">${number(apps.length)}</span></div>${
     apps.length
       ? apps
           .map(
@@ -327,6 +444,95 @@ function profileView() {
           "بعد وضوح الاحتياج وعرض الحجز، ثبّتي الموعد المتفق عليه.",
         )
   }</section><section class="panel"><div class="panel-head"><h2>تاريخ المتابعة</h2><span class="count">${number(history.length)}</span></div><ol class="timeline">${history.map((a) => `<li><div class="timeline-dot"></div><div><strong>${esc(a.body)}</strong><p>${esc(person(a.actor_id))} · ${formatDate(a.created_at)}</p>${activityDetails(a)}${a.details.outcome ? `<span class="badge">${OUTCOMES[a.details.outcome] || ""}</span>` : ""}${a.details.stage ? `<small>الحالة: ${STAGES[a.details.previous_stage]} ← ${STAGES[a.details.stage]}</small>` : ""}${a.details.status ? `<small>الحجز: ${APPOINTMENTS[a.details.status]}</small>` : ""}${a.details.starts_at ? `<small>${formatDate(a.details.starts_at)}</small>` : ""}${a.details.note ? `<small>${esc(a.details.note)}</small>` : ""}${a.details.contact_at ? `<small>وقت التواصل: ${formatDate(a.details.contact_at)}</small>` : ""}</div></li>`).join("")}</ol></section></section><aside class="side-stack"><section class="panel profile-info"><div class="panel-head"><h2>بيانات العميلة</h2><button data-act="identity">تصحيح البيانات</button></div><dl><dt>رقم / معرف التواصل</dt><dd><bdi dir="ltr">${esc(l.contact)}</bdi></dd><dt>الموظفة المسؤولة</dt><dd>${esc(person(l.owner_id))}</dd><dt>حالة العميلة</dt><dd>${STAGES[l.stage]}</dd><dt>التأهيل</dt><dd>${QUALIFICATIONS[l.qualification]}</dd><dt>درجة الاهتمام</dt><dd>${GRADES[l.grade] || "لم يُقيّم"}</dd><dt>تاريخ الاستفسار</dt><dd>${formatDate(l.received_at)}</dd><dt>أول رد</dt><dd>${l.first_response_at ? formatDate(l.first_response_at) : "لم يُسجل"}</dd><dt>الحملة</dt><dd>${esc(l.campaign) || "غير محددة"}</dd><dt>الاعتراض الرئيسي</dt><dd>${esc(label(l.objection_id))}</dd><dt>عدد المتابعات المسجلة</dt><dd>${number(l.follow_up_count)}</dd>${l.lost_reason_id ? `<dt>سبب الفقد</dt><dd>${esc(label(l.lost_reason_id))}</dd>` : ""}<dt>آخر ملاحظة</dt><dd>${esc(l.note) || "لا توجد"}</dd></dl></section><section class="tip"><div class="tip-label">قبل التواصل</div><p>${esc(configs("script").find((s) => s.id === (l.objection_id ? "script_think" : "script_followup"))?.body || "راجعي تاريخ العميلة قبل المتابعة.")}</p><button class="text-button" data-page="scripts">دليل التواصل ${icon("arrow")}</button></section></aside></div>`;
+}
+const LAYER_TITLES = {
+  base: "الأساس",
+  stage: "حسب المرحلة",
+  temp: "حسب الحرارة",
+  state: "حسب الحالة",
+  end: "قبل ما تقفلي",
+};
+function briefHtml(l) {
+  const t = tempOf(l),
+    b = leadBrief(l, {
+      appointments: data.appointments,
+      lookup: { label, person },
+      contact: contacts.get(l.id) || null,
+    }),
+    row = (k, v, wide = false) =>
+      `<div class="${wide ? "wide" : ""}"><dt>${k}</dt><dd>${v}</dd></div>`,
+    why =
+      training && t.reasons.length
+        ? `<p class="why"><b>${t.temp ? "ليه " + GRADES[t.temp] : "الحرارة"}؟</b> ${t.reasons.map((r) => esc(REASON_LABELS[r] || r)).join("، ")}${t.mode === "manual" ? ` · الدرجة معدّلة يدويًا${t.suggested ? ` والمحسوبة: ${GRADES[t.suggested]}` : ""}` : ""}</p>`
+        : "";
+  return `<section class="panel brief" aria-label="ملخص الملف"><div class="brief-head"><div><span class="eyebrow">ملخص سريع</span><h2>${esc(b.name)}</h2></div><div class="brief-tags">${badge(l)}${tempBadge(l)}</div></div><dl class="brief-grid">${row("المصدر", esc(b.source))}${row("الخدمة", esc(b.service))}${row("المرحلة", `${esc(JOURNEY_LABELS[journeyStage(l)])} · ${esc(b.qualification)}`)}${row("الموظفة", esc(b.owner))}${row("الاحتياج", esc(b.need) || "لم يُسجل بعد", true)}${row("الاعتراض", esc(b.objection) || "لا يوجد")}${row("عدد المتابعات", number(b.followUps))}${row("آخر تواصل", b.lastContact ? `${formatDate(b.lastContact.at)} · ${esc(b.lastContact.outcome)}<small>${esc(b.lastContact.summary)}</small>` : "لم يُسجل تواصل", true)}${row("المتابعة الجاية", b.nextAt ? `${esc(b.nextAction)} · ${formatDate(b.nextAt)}` : "لا توجد")}${row("الموعد القادم", b.nextAppointment ? `${formatDate(b.nextAppointment.starts_at)} · ${APPOINTMENTS[b.nextAppointment.status]}` : "لا يوجد")}</dl>${why}</section>`;
+}
+function replyVars(l) {
+  return {
+    الاسم: String(l.name || "").trim().split(/\s+/)[0],
+    الخدمة: l.service_id === "service_unknown" ? "" : label(l.service_id),
+    الموظفة: me.display_name,
+  };
+}
+function replyCard(r, vars) {
+  const f = fillTemplate(r.body, vars);
+  return `<article class="reply"><div class="reply-head"><strong>${esc(r.label)}</strong>${r.approved ? '<span class="badge green">معتمد</span>' : '<span class="badge draft">مسودة</span>'}${r.temps.length ? `<span class="reply-temps">${r.temps.map((x) => GRADES[x]).join(" / ")}</span>` : ""}</div><p class="reply-text" dir="auto">${esc(f.text)}</p>${f.missing.length ? `<p class="reply-missing">املي قبل الإرسال: ${f.missing.map((m) => esc(m.replaceAll("_", " "))).join("، ")}</p>` : ""}${training ? `<p class="reply-why"><b>ليه الرد ده؟</b> ${esc(r.why)}</p>` : ""}<button class="primary" data-reply-copy="${esc(r.id)}">${icon("copy")} نسخ الرد</button></article>`;
+}
+function repliesPanel(l) {
+  const t = tempOf(l),
+    state = replyChoice[l.id] || defaultReplyState(l, t),
+    replies = pickReplies(data.config, {
+      state,
+      temp: t.temp,
+      objectionId: state === "s6" ? l.objection_id : null,
+    }),
+    vars = replyVars(l);
+  return `<section class="panel replies"><div class="panel-head"><div><h2>الردود المناسبة</h2><p>اختاري حالة العميلة وانسخي الرد بضغطة. النصوص مسودات لحد اعتماد الإدارة.</p></div><label class="switch"><input type="checkbox" data-training ${training ? "checked" : ""}> وضع التدريب</label></div><div class="chips" role="group" aria-label="حالة رد العميلة">${Object.entries(
+    REPLY_STATES,
+  )
+    .map(
+      ([k, v]) =>
+        `<button class="chip ${k === state ? "on" : ""}" data-reply-state="${k}" aria-pressed="${k === state}">${v}</button>`,
+    )
+    .join(
+      "",
+    )}</div>${replies.length ? replies.map((r) => replyCard(r, vars)).join("") : blank("لا توجد ردود لهذه الحالة", "اختاري حالة أخرى، أو اطلبي من الإدارة إضافة قالب بوسم هذه الحالة من الإعدادات.")}</section>`;
+}
+function checklistState(l) {
+  const t = tempOf(l),
+    items = buildChecklist(l, t, {
+      followUpCount: l.follow_up_count,
+      objectionLabel: label(l.objection_id),
+    }),
+    key = checklistKey(l, t, contacts.get(l.id)?.count || 0),
+    done =
+      localChecks.get(l.id + "|" + key) ||
+      savedChecklist(data.activities, l.id, key);
+  return { items, key, done, progress: checklistProgress(items, done) };
+}
+function checklistPanel(l) {
+  const { items, key, done, progress } = checklistState(l),
+    qaTitle = Object.fromEntries(QA.map(([k, title]) => [k, title])),
+    layers = ["base", "stage", "temp", "state", "end"].filter((x) =>
+      items.some((i) => i.layer === x),
+    ),
+    coverage = Object.values(progress.byQa)
+      .map((q) => `${esc(q.title)} ${number(q.done)}/${number(q.total)}`)
+      .join(" · ");
+  return `<section class="panel checklist"><div class="panel-head"><div><h2>قائمة المتابعة</h2><p>تتغير حسب المرحلة والحرارة وبعد كل تواصل.</p></div><span class="count" id="check-count">${number(progress.complete)} / ${number(progress.total)}</span></div>${layers
+    .map(
+      (layer) =>
+        `<div class="check-group"><h3>${LAYER_TITLES[layer]}</h3>${items
+          .filter((i) => i.layer === layer)
+          .map(
+            (i) =>
+              `<label class="check-item"><input type="checkbox" data-check="${esc(i.id)}" data-key="${esc(key)}" ${done[i.id] === true ? "checked" : ""}><span>${esc(i.label)}${i.qa ? `<em class="qa-tag">${esc(qaTitle[i.qa])}</em>` : ""}${training && i.why ? `<small>${esc(i.why)}</small>` : ""}</span></label>`,
+          )
+          .join("")}</div>`,
+    )
+    .join(
+      "",
+    )}${training && coverage ? `<p class="qa-coverage"><b>ربط معايير الجودة:</b> ${coverage}</p>` : ""}</section>`;
 }
 function appointmentsView() {
   const ids = new Set(filtered().map((l) => l.id));
@@ -404,7 +610,7 @@ function scripts() {
   )
     .map(
       (c) =>
-        `<article class="panel script"><div class="script-top">${icon("book")}<h3>${esc(c.label)}</h3></div><p>${esc(c.body)}</p><button data-copy="${c.id}">نسخ النص</button></article>`,
+        `<article class="panel script"><div class="script-top">${icon("book")}<h3>${esc(c.label)}</h3>${tagsOf(c).approved ? "" : '<span class="badge draft">مسودة</span>'}</div><p>${esc(c.body)}</p><button data-copy="${c.id}">نسخ النص</button></article>`,
     )
     .join(
       "",
@@ -504,12 +710,20 @@ const nextFields = (l = {}) =>
     ),
   );
 function addModal() {
+  // Fast path: name, contact and source are all that is needed to save.
+  // Everything else has a safe default and sits under "more details".
   openModal(
     "إضافة عميلة جديدة",
     field(
       "name",
       "اسم العميلة",
-      input("name", "text", "", true, 'maxlength="120" autocomplete="off"'),
+      input(
+        "name",
+        "text",
+        "",
+        true,
+        'maxlength="120" autocomplete="off" autofocus',
+      ),
     ) +
       field(
         "contact",
@@ -519,18 +733,19 @@ function addModal() {
           "text",
           "",
           true,
-          'dir="ltr" maxlength="160" placeholder="01xxxxxxxxx أو @username"',
+          'dir="ltr" inputmode="tel" maxlength="160" autocomplete="off" placeholder="01xxxxxxxxx أو @username"',
         ),
-      ) +
-      field(
-        "owner_id",
-        "موظفة المبيعات",
-        select("owner_id", peopleOptions(me.id)),
       ) +
       field(
         "source_id",
         "مصدر الاستفسار",
         select("source_id", configOptions("source", "", "اختاري المصدر")),
+      ) +
+      `<details class="wide more-fields"><summary>تفاصيل إضافية (اختياري)</summary><div class="form-grid">` +
+      field(
+        "owner_id",
+        "موظفة المبيعات",
+        select("owner_id", peopleOptions(me.id)),
       ) +
       field(
         "service_id",
@@ -563,7 +778,8 @@ function addModal() {
         "ملاحظات",
         `<textarea id="note" name="note" maxlength="3000" rows="2"></textarea>`,
         true,
-      ),
+      ) +
+      `</div></details>`,
     async (f) => {
       if (!contactValid(f.contact))
         throw Error("اكتبي رقم أو بريد أو معرف تواصل صالح");
@@ -655,7 +871,7 @@ function editModal(l, initialStage) {
       field(
         "grade",
         "درجة الاهتمام",
-        `<select id="grade" name="grade">${options(GRADES, l.grade, "لم يُقيّم")}</select>`,
+        `<select id="grade" name="grade">${options(GRADES, l.grade, "تلقائي — تُحسب من التواصل")}</select>`,
       ) +
       field(
         "objection_id",
@@ -973,9 +1189,18 @@ function memberModal() {
       }),
   );
 }
+const TAGGABLE = ["script", "objection"];
 function configModal(id) {
   const c = data.config.find((c) => c.id === id);
-  openModal(
+  const tags = c ? tagsOf(c) : { states: [], temps: [], objections: [], why: "", approved: false };
+  const checks = (prefix, entries, selected) =>
+    entries
+      .map(
+        ([k, v]) =>
+          `<label class="checkbox"><input type="checkbox" name="${prefix}${esc(k)}" ${selected.includes(k) ? "checked" : ""}> ${esc(v)}</label>`,
+      )
+      .join("");
+  const d = openModal(
     c ? "تعديل إعداد" : "إضافة إعداد",
     field(
       "id",
@@ -1026,10 +1251,37 @@ function configModal(id) {
         "النص / التفاصيل المعتمدة",
         `<textarea id="body" name="body" maxlength="5000" rows="5">${esc(c?.body || "")}</textarea>`,
         true,
-      ),
-    (f) =>
-      rpc("save_configuration", { p: { ...f, active: f.active === "true" } }),
+      ) +
+      `<fieldset class="wide tag-fields" id="tag-fields"><legend>وسوم ظهور الرد</legend><p>الرد يظهر في ملف العميلة للحالات والحرارة المحددة هنا.</p><div class="check-row"><b>حالة رد العميلة</b>${checks("st_", Object.entries(REPLY_STATES), tags.states)}</div><div class="check-row"><b>الحرارة</b>${checks("tp_", Object.entries(GRADES), tags.temps)}</div><div class="check-row"><b>الاعتراض</b>${checks("ob_", configs("objection").map((o) => [o.id, o.label]), tags.objections)}</div><label class="field wide"><span>ليه الرد ده؟ (للتدريب)</span><textarea id="why" name="why" maxlength="600" rows="2">${esc(tags.why)}</textarea></label><label class="checkbox wide"><input type="checkbox" name="approved" ${tags.approved ? "checked" : ""}> معتمد من الإدارة (بدون علامة «مسودة»)</label></fieldset>`,
+    (f) => {
+      const p = { ...f, active: f.active === "true" };
+      for (const k of Object.keys(p))
+        if (/^(st|tp|ob)_/.test(k) || k === "why" || k === "approved")
+          delete p[k];
+      if (TAGGABLE.includes(f.category)) {
+        const pick = (prefix) =>
+          Object.keys(f)
+            .filter((k) => k.startsWith(prefix))
+            .map((k) => k.slice(prefix.length));
+        p.meta = {
+          ...(c?.meta && typeof c.meta === "object" ? c.meta : {}),
+          states: pick("st_"),
+          temps: pick("tp_"),
+          objections: pick("ob_"),
+          why: (f.why || "").trim(),
+          approved: f.approved === "on",
+        };
+      }
+      return rpc("save_configuration", { p });
+    },
   );
+  const sync = () => {
+    d.querySelector("#tag-fields").hidden = !TAGGABLE.includes(
+      d.querySelector("#category").value,
+    );
+  };
+  d.querySelector("#category").onchange = sync;
+  sync();
 }
 function exportResults() {
   const ls = filtered(),
@@ -1082,6 +1334,7 @@ function go(target) {
   render();
   window.scrollTo(0, 0);
 }
+let checkTimer;
 function bind() {
   document.querySelectorAll("[data-queue]").forEach(
     (b) =>
@@ -1131,6 +1384,86 @@ function bind() {
         } catch {
           toast("النسخ التلقائي غير متاح. حددي النص وانسخيه يدويًا.", true);
         }
+      }),
+  );
+  document.querySelectorAll("[data-today-view]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        todayView = b.dataset.todayView;
+        render();
+      }),
+  );
+  document.querySelectorAll("[data-reply-state]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        replyChoice[selected] = b.dataset.replyState;
+        render();
+      }),
+  );
+  document.querySelectorAll("[data-training]").forEach(
+    (b) =>
+      (b.onchange = () => {
+        setTraining(b.checked);
+        render();
+      }),
+  );
+  document.querySelectorAll("[data-reply-copy]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        const l = data.leads.find((x) => x.id === selected);
+        if (!l) return;
+        const t = tempOf(l),
+          state = replyChoice[l.id] || defaultReplyState(l, t),
+          r = pickReplies(data.config, {
+            state,
+            temp: t.temp,
+            objectionId: state === "s6" ? l.objection_id : null,
+          }).find((x) => x.id === b.dataset.replyCopy);
+        if (!r) return;
+        const f = fillTemplate(r.body, replyVars(l));
+        try {
+          await navigator.clipboard.writeText(f.text);
+          toast(
+            f.missing.length
+              ? "تم النسخ. لسه محتاجة تملي: " +
+                  f.missing.map((m) => m.replaceAll("_", " ")).join("، ")
+              : "تم نسخ الرد. راجعيه قبل الإرسال.",
+          );
+        } catch {
+          toast("النسخ التلقائي غير متاح. حددي النص وانسخيه يدويًا.", true);
+        }
+      }),
+  );
+  document.querySelectorAll("[data-check]").forEach(
+    (box) =>
+      (box.onchange = () => {
+        const lid = selected,
+          key = box.dataset.key,
+          mapKey = lid + "|" + key,
+          cur = {
+            ...(localChecks.get(mapKey) ||
+              savedChecklist(data.activities, lid, key)),
+          };
+        cur[box.dataset.check] = box.checked;
+        localChecks.set(mapKey, cur);
+        const total = document.querySelectorAll("[data-check]").length,
+          doneCount = document.querySelectorAll("[data-check]:checked").length,
+          counter = document.querySelector("#check-count");
+        if (counter)
+          counter.textContent = `${number(doneCount)} / ${number(total)}`;
+        clearTimeout(checkTimer);
+        checkTimer = setTimeout(async () => {
+          try {
+            await rpc("record_checklist", { lid, p: { key, done: cur } });
+          } catch (e) {
+            toast(
+              /record_checklist|function/i.test(e?.message || "")
+                ? "حفظ القائمة يحتاج تحديث قاعدة البيانات. التعديل ظاهر هنا فقط لحد ما تقفلي الصفحة."
+                : arabicError(e),
+              true,
+            );
+          }
+        }, 800);
       }),
   );
   document.querySelectorAll("[data-act]").forEach(
@@ -1248,14 +1581,14 @@ function bind() {
 }
 window.addEventListener("hashchange", () => {
   const p = location.hash.slice(1);
-  if (nav.some((n) => n[0] === p) && p !== page) {
+  if (routes.includes(p) && p !== page) {
     page = p;
     selected = null;
     if (me) render();
   }
 });
 async function init() {
-  page = nav.some((n) => n[0] === location.hash.slice(1))
+  page = routes.includes(location.hash.slice(1))
     ? location.hash.slice(1)
     : "today";
   if (!configured) {
@@ -1311,7 +1644,7 @@ function activityDetails(a) {
   const d = a.details || {};
   if (d.field) {
     const translate = (v) => {
-      if (v === null) return "غير محدد";
+      if (v === null) return d.field === "grade" ? "تلقائي" : "غير محدد";
       if (d.field === "stage") return STAGES[v];
       if (d.field === "qualification") return QUALIFICATIONS[v];
       if (d.field === "grade") return GRADES[v];
