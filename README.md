@@ -18,7 +18,7 @@ npm run build
 npm run dev
 ```
 
-Copy `.env.example` to an untracked local environment file and configure the Supabase URL and publishable key. Never use a service-role key in the client. Production QA-anonymous flag defaults false. Preview may set `VITE_QA_ANONYMOUS=true`, but membership must still be provisioned explicitly with an expiry. Permanent accounts use the existing Supabase password login and profiles/RLS model.
+Copy `.env.example` to an untracked local environment file and configure the Supabase URL and publishable key. Never use a service-role key in the client. Production QA-anonymous flag defaults false. Preview may set `VITE_QA_ANONYMOUS=true`, the user-approved QA opening can provision temporary sales membership automatically until 2026-11-06 19:58 Cairo. Outside an explicitly activated QA-only window, enrollment stays closed. Permanent accounts use the existing Supabase password login and profiles/RLS model.
 
 Apply the committed SQL migrations in order, then seed configuration once from `supabase/seed.sql`. The original source migration `202611040001_initial.sql` corresponds to the server history entry `20261104001445 rawnaq_initial`; preserve that historical mapping when baselining an existing project. Do not rerun initial schema creation against the live database.
 

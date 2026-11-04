@@ -6,11 +6,12 @@
     "project_id": "uucdnakounzqeqwkzfel",
     "source_of_truth": true,
     "rls_enabled": true,
-    "anonymous_access": "Explicit expiring QA membership only; no public enrollment",
+    "anonymous_access": "User-approved login-free QA: automatic expiring sales membership until 2026-11-06 19:58 Cairo; RLS remains enabled",
     "new_migrations": [
       "20261104170848_v02_core_pilot_model_and_shared_team",
       "20261104171326_v02_activity_recorded_and_occurred_history",
-      "20261104171438_v02_contact_occurrence_timestamp"
+      "20261104171438_v02_contact_occurrence_timestamp",
+      "20261104175832_qa_temporary_login_free_sales_access"
     ]
   },
   "verification": {

@@ -28,7 +28,7 @@ Activities retain actor, type, lead ID, `recorded_at` (generated from created_at
 
 ## Shared access and temporary QA
 
-All explicitly enrolled, active RAWNAQ members share the team workspace. This is the approved two-employee access model, not public visibility. RLS stays enabled on every operational table. The anon role has no data grants. Anonymous authentication alone confers no membership. Anonymous QA profiles also require a future `qa_expires_at`; test memberships expire after 48 hours. No public enrollment/admin creation path exists. Direct client writes are revoked; membership/admin checks remain inside RPCs. Owner reassignment, configuration, QA review and team administration remain admin-only.
+All explicitly enrolled, active RAWNAQ members share the team workspace. This is the approved two-employee access model, not public visibility. RLS stays enabled on every operational table. The anon role has no data grants. Anonymous authentication alone confers no membership. Anonymous QA profiles also require a future `qa_expires_at`; test memberships expire after 48 hours. A user-authorized, time-limited QA opening can provision anonymous visitors automatically as expiring sales reps through join_qa_workspace. It is disabled by default and requires an active QA-only configuration window of at most 49 hours. It cannot create admins or change existing roles. No admin self-enrollment path exists. Direct client writes are revoked; membership/admin checks remain inside RPCs. Owner reassignment, configuration, QA review and team administration remain admin-only.
 
 `VITE_QA_ANONYMOUS=true` is a Preview-only login mechanism. Production defaults false and retains Supabase password authentication. Anonymous QA is not the final production authorization model. No real customer data is authorized until production Auth/RLS has separate QA approval.
 
@@ -45,3 +45,5 @@ Admin full JSON export includes schema version, export time, timezone, leads, ap
 Source and lockfile are committed to the existing V0.2 branch. Public connection values and the Preview QA flag are deployment environment variables; no service-role credentials are used in frontend or acceptance tests. The tested Preview must identify its Git commit; the old QA deployment must remain unchanged.
 
 Anonymous QA tabs use separate Auth storage/broadcast keys so concurrent tabs retain independent identities across refresh. This does not change operational Supabase storage or production authentication.
+
+2026-11-04 user-approved QA change: hide login and manual enrollment by automatically joining the expiring synthetic-data workspace. The live opening expires 2026-11-06 19:58 Cairo. RLS and validated RPC writes remain enabled. Only the new QA Preview URL has its Vercel authentication gate removed; production authentication remains configured.

@@ -193,5 +193,34 @@ test("V0.2 migration, shared team, complete lifecycle, notes and rejected operat
   await actor(a);
   assert.equal((await pg.query("select * from leads")).rows.length, 0);
   await assert.rejects(add("EXPIRED"), /مصرح/);
+  await actor(outsider);
+  await assert.rejects(rpc("join_qa_workspace", {}), /انتهت فترة/);
+  await pg.exec("reset role");
+  await pg.exec(
+    `insert into configuration(id,category,label,meta)values('setting_qa_open_access','setting','QA',jsonb_build_object('qa_only',true,'enabled_until',now()+interval '1 hour'));`,
+  );
+  await actor(outsider);
+  await rpc("join_qa_workspace", {});
+  const joined = (
+    await pg.query("select * from profiles where id=$1", [outsider])
+  ).rows[0];
+  assert.equal(joined.role, "rep");
+  assert.ok(joined.qa_expires_at);
+  assert.equal((await pg.query("select * from leads")).rows.length, 5);
+  await assert.rejects(
+    rpc("manage_member", {
+      uid: outsider,
+      p: { role: "admin", display_name: "QA" },
+    }),
+    /متاح.*فقط/,
+  );
+  await pg.exec("reset role");
+  await pg.exec(
+    `update configuration set meta=jsonb_build_object('qa_only',true,'enabled_until',now()-interval '1 second') where id='setting_qa_open_access';`,
+  );
+  await actor(outsider);
+  await assert.rejects(rpc("join_qa_workspace", {}), /انتهت فترة/);
+  await pg.exec("set role anon");
+  await assert.rejects(rpc("join_qa_workspace", {}), /permission denied/);
   await pg.close();
 });

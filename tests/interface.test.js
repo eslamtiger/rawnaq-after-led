@@ -78,6 +78,14 @@ test("Arabic interface: navigation, empty data, profile and validated save forms
     },
     rpc: async (name, args) => {
       calls.push([name, args]);
+      if (name === "join_qa_workspace") {
+        fixture.profiles.push({
+          id: own,
+          display_name: "تجربة رونق",
+          role: "rep",
+          active: true,
+        });
+      }
       if (name === "add_lead") {
         fixture.leads.push({
           id: "lead_test",
@@ -168,5 +176,12 @@ test("Arabic interface: navigation, empty data, profile and validated save forms
   await tick();
   assert.ok(w.document.body.textContent.includes(own));
   assert.ok(!w.document.body.textContent.includes("${esc("));
+  context.qaAnonymous = true;
+  authHandler("SIGNED_IN", { user: { id: own, is_anonymous: true } });
+  await tick();
+  await tick();
+  assert.ok(calls.some(([name]) => name === "join_qa_workspace"));
+  assert.ok(w.document.querySelector("aside.sidebar"));
+  assert.ok(!w.document.body.textContent.includes("الحساب يحتاج تصريح"));
   await w.happyDOM.close();
 });

@@ -172,6 +172,11 @@ async function refresh() {
   try {
     data = await loadWorkspace();
     me = data.profiles.find((p) => p.id === session.user.id && p.active);
+    if (!me && qaAnonymous) {
+      await rpc("join_qa_workspace");
+      data = await loadWorkspace();
+      me = data.profiles.find((p) => p.id === session.user.id && p.active);
+    }
     if (!me) {
       root.innerHTML = `<main class="access">${blank("الحساب يحتاج تصريح من الإدارة", "تم تسجيل الدخول، لكن الحساب غير مضاف لفريق رونق أو تم إيقافه. معرّف طلب التصريح: " + esc(session.user.id), '<button data-act="logout">تسجيل الخروج</button>')}</main>`;
       bind();
