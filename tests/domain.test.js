@@ -1,0 +1,86 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  normalizeContact,
+  contactValid,
+  cairoDay,
+  cairoISO,
+  localInput,
+  qaScore,
+  metrics,
+  queue,
+  safeCSV,
+} from "../src/domain.js";
+test("Egyptian numbers normalize and duplicate safely", () => {
+  assert.equal(normalizeContact("٠١٠ ١٢٣٤ ٥٦٧٨"), "+201012345678");
+  assert.equal(normalizeContact("00201012345678"), "+201012345678");
+  assert.ok(contactValid("@client_1"));
+  assert.ok(!contactValid("bad phone"));
+});
+test("Cairo wall times round trip in summer and winter", () => {
+  for (const w of ["2026-11-04T11:30", "2026-07-04T11:30"])
+    assert.equal(localInput(cairoISO(w)), w);
+  assert.equal(cairoDay("2026-11-03T23:15:00Z"), "2026-11-04");
+});
+test("QA excludes non applicable, never gives healthy zero for no data", () => {
+  assert.equal(qaScore({}), null);
+  assert.equal(qaScore({ response: 5, greeting: 10, booking: null }), 75);
+  assert.throws(() => qaScore({ booking: 16 }));
+});
+test("Cohort rates, future visits, cancellations and historic booked deduplication", () => {
+  const now = Date.parse("2026-11-04T12:00Z");
+  const ls = [
+    {
+      id: "1",
+      received_at: "2026-11-01T12:00Z",
+      first_response_at: "2026-11-01T12:05Z",
+      first_booked_at: "2026-11-02T10:00Z",
+      qualified_at: "2026-11-01T12:05Z",
+    },
+    { id: "2", received_at: "2026-11-01T12:00Z" },
+  ];
+  const m = metrics(
+    ls,
+    [
+      { lead_id: "1", starts_at: "2026-11-02T12:00Z", status: "no_show" },
+      { lead_id: "1", starts_at: "2026-11-03T12:00Z", status: "attended" },
+      { lead_id: "1", starts_at: "2026-11-05T12:00Z", status: "scheduled" },
+      { lead_id: "1", starts_at: "2026-11-03T12:00Z", status: "cancelled" },
+      { lead_id: "other", starts_at: "2026-11-03T12:00Z", status: "attended" },
+    ],
+    now,
+  );
+  assert.equal(m.booked, 1);
+  assert.equal(m.dueAppointments, 2);
+  assert.equal(m.attended, 1);
+  assert.equal(m.response, 5);
+  assert.equal(metrics([], []).response, null);
+});
+test("Queue excludes closed leads and prioritizes unanswered then older tasks", () => {
+  const now = Date.parse("2026-11-04T12:00Z");
+  const rows = [
+    { id: "closed", stage: "lost" },
+    {
+      id: "today",
+      stage: "follow_up",
+      first_response_at: "2026-11-01T10:00Z",
+      next_at: "2026-11-04T11:00Z",
+    },
+    {
+      id: "overdue",
+      stage: "follow_up",
+      first_response_at: "2026-11-01T10:00Z",
+      next_at: "2026-11-02T11:00Z",
+    },
+    { id: "new", stage: "new", next_at: "2026-11-04T11:00Z" },
+  ];
+  assert.deepEqual(
+    queue(rows, now).map((x) => x.id),
+    ["new", "overdue", "today"],
+  );
+});
+test("Export escapes spreadsheet formula injection", () => {
+  const csv = safeCSV([['=IMPORTXML("bad")', "+20101", "normal"]]);
+  assert.ok(csv.includes("'=IMPORTXML"));
+  assert.ok(csv.includes("'+20101"));
+});

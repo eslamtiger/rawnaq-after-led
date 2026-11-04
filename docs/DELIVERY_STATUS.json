@@ -1,0 +1,43 @@
+{
+  "version": "0.1.0",
+  "status": "implementation_complete_pending_external_setup",
+  "source_library_file_id": "libfile_aed8e64753e481918312a1a22beef256",
+  "source_sheets_read": 10,
+  "supabase": {
+    "connection_verified": true,
+    "projects_found": 0,
+    "available_organization_name": "eslam",
+    "available_organization_id": "eapxvwwmpektfpexsevx",
+    "organization_selection_confirmed": false,
+    "project_id": null,
+    "migrations_applied_to_live": false,
+    "authentication_tested_live": false
+  },
+  "vercel": {
+    "target_team_id": "team_OHgya7JwzJLvOOiElephMX6z",
+    "requested_project_name": "rawnaq-after-lead-sales",
+    "project_created": false,
+    "blocker": "team access consent required; previous consent link expired",
+    "live_url": null
+  },
+  "github": {
+    "connected_login": "eslamtiger",
+    "repository_created": true,
+    "repository_url": "https://github.com/eslamtiger/rawnaq-after-led",
+    "write_access_verified": true,
+    "source_upload_status": "uploaded"
+  },
+  "verification": {
+    "local_tests_passed": 15,
+    "build": "passed",
+    "database_engine": "PGlite PostgreSQL, isolated Auth test schema",
+    "browser": "unconfigured login screen inspected at managed preview",
+    "live_end_to_end": false,
+    "mobile_visual_qa": false,
+    "latest_resume_checks": {
+      "syntax": "passed",
+      "domain_tests_passed": 6,
+      "full_suite_rerun": false
+    }
+  }
+}
