@@ -9,6 +9,7 @@ import {
   qaScore,
   metrics,
   queue,
+  priority,
   safeCSV,
 } from "../src/domain.js";
 test("Egyptian numbers normalize and duplicate safely", () => {
@@ -83,4 +84,12 @@ test("Export escapes spreadsheet formula injection", () => {
   const csv = safeCSV([['=IMPORTXML("bad")', "+20101", "normal"]]);
   assert.ok(csv.includes("'=IMPORTXML"));
   assert.ok(csv.includes("'+20101"));
+});
+
+test('Reject impossible calendar values and classify same-day overdue', () => {
+  for (const v of ['2027-02-30T12:00', '2027-04-31T12:00', '2027-13-01T12:00', '2027-01-01T25:00']) assert.throws(() => cairoISO(v));
+  assert.ok(cairoISO('2028-02-29T12:00'));
+  const now = Date.parse('2026-11-04T08:00:00Z');
+  const lead = {stage:'contacted', first_response_at:'2026-11-04T06:00:00Z', next_at:'2026-11-04T07:00:00Z'};
+  assert.equal(priority(lead,now),1);
 });

@@ -106,6 +106,10 @@ export function localInput(v = new Date()) {
 export function cairoISO(wall) {
   if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(wall))
     throw Error("راجعي التاريخ والوقت");
+  const [year, month, day, hour, minute] = wall.split(/[-T:]/).map(Number);
+  const calendar = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  if (year < 100 || calendar.getUTCFullYear() !== year || calendar.getUTCMonth() !== month - 1 || calendar.getUTCDate() !== day || calendar.getUTCHours() !== hour || calendar.getUTCMinutes() !== minute)
+    throw Error("راجعي التاريخ والوقت");
   const target = Date.parse(wall + "Z");
   let guess = target;
   for (let i = 0; i < 4; i++) {
@@ -121,8 +125,7 @@ export function priority(l, now = Date.now()) {
   if (!l.first_response_at) return 0;
   if (
     l.next_at &&
-    Date.parse(l.next_at) < now &&
-    cairoDay(l.next_at) !== cairoDay(now)
+    Date.parse(l.next_at) < now
   )
     return 1;
   if (l.grade === "hot" && !l.booking_offered_at) return 2;
