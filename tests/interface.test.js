@@ -136,7 +136,7 @@ test("Arabic interface: navigation, empty data, profile and validated save forms
   await tick();
   assert.equal(calls[0][0], "add_lead");
   assert.equal(calls[0][1].p.contact, "+201012345678");
-  assert.ok(w.document.body.textContent.includes("الخطوة القادمة"));
+  assert.ok(w.document.body.textContent.includes("سجّلت تواصل"));
   assert.ok(w.document.body.textContent.includes("عميلة اختبار"));
 
   click('[data-act="edit"]');

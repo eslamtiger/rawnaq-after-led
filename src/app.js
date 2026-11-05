@@ -62,6 +62,7 @@ let session = null,
     qa: [],
   },
   page = "today",
+  afterSave = null,
   selected = null,
   search = "",
   filterStage = "",
@@ -298,7 +299,7 @@ function morePage() {
     ["qa", "الجودة والتدريب", "مراجعات التواصل ومعايير الجودة", "check"],
     ["settings", "الإعدادات", "المصادر والقوالب وفريق العمل", "settings"],
   ];
-  return `${heading("كل الأقسام", "المزيد", "باقي أقسام رونق.")}<section class="panel more-list">${items.map(([id, t, s, i]) => `<button class="more-item" data-page="${id}">${icon(i)}<span><strong>${t}</strong><small>${s}</small></span>${icon("arrow")}</button>`).join("")}<button class="more-item" data-act="logout">${icon("logout")}<span><strong>تسجيل الخروج</strong><small>${esc(me.display_name)}</small></span></button></section>`;
+  return `${heading("كل الأقسام", "المزيد", "باقي أقسام رونق.")}<section class="panel more-list">${items.map(([id, t, s, i]) => `<button class="more-item" data-page="${id}">${icon(i)}<span><strong>${t}</strong><small>${s}</small></span>${icon("arrow")}</button>`).join("")}<label class="more-item switch-row"><span><strong>وضع التدريب</strong><small>يظهر سبب كل رد وخطوة. للموظفة الجديدة</small></span><input type="checkbox" data-training ${training ? "checked" : ""}></label><button class="more-item" data-act="logout">${icon("logout")}<span><strong>تسجيل الخروج</strong><small>${esc(me.display_name)}</small></span></button></section>`;
 }
 function byUrgency(now) {
   return (a, b) =>
@@ -414,13 +415,17 @@ function profileView() {
     closed = TERMINAL.includes(l.stage);
   const lateNow = l.next_at && Date.parse(l.next_at) < Date.now();
   const cs = checklistState(l);
-  const primary = closed
-    ? '<button class="primary big" data-act="reopen">إعادة فتح الملف</button>'
-    : '<button class="primary big" data-act="contact">تسجيل تواصل</button>';
+  const lc = contacts.get(l.id);
+  const lastLine = lc
+    ? `${formatDate(lc.at)} · ${OUTCOMES[lc.outcome] || ""}${lc.summary ? " — " + esc(lc.summary) : ""}`
+    : "لسه مفيش تواصل مسجل";
+  const nextLine = closed
+    ? "الملف مغلق"
+    : `${ACTIONS[l.next_action] || "متابعة"} · ${l.next_at ? formatDate(l.next_at) : "من غير موعد"}`;
   const more = closed
     ? ""
     : `<details class="more-actions"><summary>إجراءات أخرى</summary><div class="profile-actions"><button data-act="edit">تحديث الحالة</button><button data-act="book">${icon("calendar")} ${l.stage === "no_show" ? "إعادة الحجز" : "تثبيت حجز"}</button>${l.stage === "no_show" ? `<button data-act="recover-followup">متابعة</button><button data-act="recover-lost">إغلاق كـ Lost</button>` : ""}${!l.booking_offered_at ? `<button data-act="offer">تم عرض الحجز</button>` : `<span class="badge">عُرض الحجز ${formatDate(l.booking_offered_at)}</span>`}</div></details>`;
-  return `<button class="text-button back" data-act="back">→ رجوع</button><div class="file-head"><div><h1>${esc(l.name)}</h1><p>${esc(label(l.service_id))} · ${esc(label(l.source_id))}</p></div>${tempBadge(l)}</div><section class="step-card ${lateNow ? "is-late" : ""}"><span class="next-kicker">الخطوة القادمة</span><h2>${ACTIONS[l.next_action] || "الملف مغلق"}</h2><p class="next-why">${l.next_at ? formatDate(l.next_at) : "لا توجد متابعة مفتوحة"}</p>${l.need ? `<p class="next-meta">${esc(l.need)}</p>` : '<p class="next-meta">ملخص الاحتياج لم يُسجل بعد.</p>'}${primary}${more}</section>${fold("replies", "الرد المناسب", "اختاري حالة العميلة وانسخي", repliesPanel(l))}${fold("brief", "ملخص العميلة", "", briefHtml(l))}${fold("checklist", "قائمة المتابعة", `${number(cs.progress.complete)} من ${number(cs.progress.total)}`, checklistPanel(l))}${fold("bookings", "الحجوزات", number(apps.length), `<div class="fold-plain">${
+  const detailsInner = `${fold("brief", "ملخص العميلة", "", briefHtml(l))}${fold("checklist", "قائمة المتابعة", `${number(cs.progress.complete)} من ${number(cs.progress.total)}`, checklistPanel(l))}${fold("bookings", "الحجوزات", number(apps.length), `<div class="fold-plain">${
     apps.length
       ? apps
           .map(
@@ -443,6 +448,7 @@ function profileView() {
           "بعد وضوح الاحتياج وعرض الحجز، ثبّتي الموعد المتفق عليه.",
         )
   }</div>`)}${fold("history", "تاريخ المتابعة", number(history.length), `<ol class="timeline">${history.map((a) => `<li><div class="timeline-dot"></div><div><strong>${esc(a.body)}</strong><p>${esc(person(a.actor_id))} · ${formatDate(a.created_at)}</p>${activityDetails(a)}${a.details.outcome ? `<span class="badge">${OUTCOMES[a.details.outcome] || ""}</span>` : ""}${a.details.stage ? `<small>الحالة: ${STAGES[a.details.previous_stage]} ← ${STAGES[a.details.stage]}</small>` : ""}${a.details.status ? `<small>الحجز: ${APPOINTMENTS[a.details.status]}</small>` : ""}${a.details.starts_at ? `<small>${formatDate(a.details.starts_at)}</small>` : ""}${a.details.note ? `<small>${esc(a.details.note)}</small>` : ""}${a.details.contact_at ? `<small>وقت التواصل: ${formatDate(a.details.contact_at)}</small>` : ""}</div></li>`).join("")}</ol>`)}${fold("info", "بيانات العميلة", "", `<div class="profile-info"><dl><dt>رقم / معرف التواصل</dt><dd><bdi dir="ltr">${esc(l.contact)}</bdi></dd><dt>الموظفة المسؤولة</dt><dd>${esc(person(l.owner_id))}</dd><dt>حالة العميلة</dt><dd>${STAGES[l.stage]}</dd><dt>التأهيل</dt><dd>${QUALIFICATIONS[l.qualification]}</dd><dt>درجة الاهتمام</dt><dd>${GRADES[l.grade] || "لم يُقيّم"}</dd><dt>تاريخ الاستفسار</dt><dd>${formatDate(l.received_at)}</dd><dt>أول رد</dt><dd>${l.first_response_at ? formatDate(l.first_response_at) : "لم يُسجل"}</dd><dt>الحملة</dt><dd>${esc(l.campaign) || "غير محددة"}</dd><dt>الاعتراض الرئيسي</dt><dd>${esc(label(l.objection_id))}</dd><dt>عدد المتابعات المسجلة</dt><dd>${number(l.follow_up_count)}</dd>${l.lost_reason_id ? `<dt>سبب الفقد</dt><dd>${esc(label(l.lost_reason_id))}</dd>` : ""}<dt>آخر ملاحظة</dt><dd>${esc(l.note) || "لا توجد"}</dd></dl><button data-act="identity">تصحيح البيانات</button></div>`)}`;
+  return `<button class="text-button back" data-act="back">→ رجوع</button><div class="file-head"><div><h1>${esc(l.name)}</h1><p>${esc(label(l.service_id))} · ${esc(label(l.source_id))}</p></div>${tempBadge(l)}</div><section class="recap ${lateNow ? "is-late" : ""}"><dl><div><dt>آخر ما حصل</dt><dd>${lastLine}</dd></div><div><dt>الاحتياج</dt><dd>${esc(l.need) || "لسه ماتسجلش"}</dd></div></dl></section>${closed ? `<section class="step-card"><h2>الملف مغلق</h2><button class="primary big" data-act="reopen">إعادة فتح الملف</button></section>` : `<section class="flow-step"><h2><span class="step-no">١</span> ردّي على العميلة</h2>${repliesPanel(l)}</section><section class="flow-step"><h2><span class="step-no">٢</span> سجّلي اللي حصل</h2><p class="next-why">الجاي بعد كده: ${nextLine}</p><button class="primary big" data-act="contact">سجّلت تواصل</button>${more}</section>`}<details class="fold-all" ${folds.has("all") ? "open" : ""} data-fold="all"><summary>تفاصيل أكتر <small>الخطوات والحجوزات والتاريخ</small></summary><div class="fold-all-body">${detailsInner}</div></details>`;
 }
 const LAYER_TITLES = {
   base: "الأساس",
@@ -486,16 +492,8 @@ function repliesPanel(l) {
       objectionId: state === "s6" ? l.objection_id : null,
     }),
     vars = replyVars(l);
-  return `<section class="panel replies"><div class="panel-head"><div><h2>الردود المناسبة</h2><p>اختاري حالة العميلة وانسخي الرد بضغطة. النصوص مسودات لحد اعتماد الإدارة.</p></div><label class="switch"><input type="checkbox" data-training ${training ? "checked" : ""}> وضع التدريب</label></div><div class="chips" role="group" aria-label="حالة رد العميلة">${Object.entries(
-    REPLY_STATES,
-  )
-    .map(
-      ([k, v]) =>
-        `<button class="chip ${k === state ? "on" : ""}" data-reply-state="${k}" aria-pressed="${k === state}">${v}</button>`,
-    )
-    .join(
-      "",
-    )}</div>${replies.length ? replies.map((r) => replyCard(r, vars)).join("") : blank("لا توجد ردود لهذه الحالة", "اختاري حالة أخرى، أو اطلبي من الإدارة إضافة قالب بوسم هذه الحالة من الإعدادات.")}</section>`;
+  const [best, ...others] = replies;
+  return `<section class="panel replies"><label class="state-pick"><span>العميلة بتقول إيه؟</span><select data-reply-select aria-label="حالة رد العميلة">${Object.entries(REPLY_STATES).map(([k, v]) => `<option value="${k}" ${k === state ? "selected" : ""}>${v}</option>`).join("")}</select></label>${best ? replyCard(best, vars) : blank("لا توجد ردود لهذه الحالة", "اختاري حالة أخرى، أو اطلبي من الإدارة إضافة قالب بوسم هذه الحالة من الإعدادات.")}${others.length ? `<details class="more-replies"><summary>ردود تانية لنفس الحالة (${number(others.length)})</summary>${others.map((r) => replyCard(r, vars)).join("")}</details>` : ""}</section>`;
 }
 function checklistState(l) {
   const t = tempOf(l),
@@ -659,7 +657,10 @@ function settings() {
     .join("")}</div></section>`;
 }
 function openModal(title, body, onSubmit) {
+  const keep = afterSave;
+  afterSave = null;
   const dialog = document.querySelector("#modal");
+  afterSave = keep;
   dialog.innerHTML = `<form id="modal-form"><div class="modal-head"><h2 id="modal-title">${title}</h2><button class="icon-button" type="button" data-close aria-label="إغلاق">${icon("close")}</button></div><div class="form-grid">${body}</div><div class="form-error" role="alert"></div><div class="modal-footer"><button class="primary" type="submit">حفظ</button><button type="button" data-close>إلغاء</button></div></form>`;
   dialog.querySelectorAll("[data-close]").forEach(
     (b) =>
@@ -682,6 +683,11 @@ function openModal(title, body, onSubmit) {
       dialog.close();
       toast("تم الحفظ بنجاح");
       await refresh();
+      if (afterSave) {
+        const next = afterSave;
+        afterSave = null;
+        next();
+      }
     } catch (err) {
       dialog.querySelector(".form-error").textContent = arabicError(err);
       buttons.forEach((b) => (b.disabled = false));
@@ -797,29 +803,42 @@ function addModal() {
   );
 }
 function contactModal(l) {
-  openModal(
-    "تسجيل تواصل",
+  afterSave = () => {
+    go("today");
+    toast("اتسجل. دي الخطوة اللي بعدها");
+  };
+  const firstBox = !l.first_response_at
+    ? `<label class="checkbox wide"><input type="checkbox" name="first_reply" checked> ده أول رد من الفريق على استفسار العميلة</label>`
+    : "";
+  const dlg = openModal(
+    "سجّلي اللي حصل",
     field(
-      "contact_at",
-      "وقت التواصل الفعلي — القاهرة",
-      input("contact_at", "datetime-local", localInput(), true),
+      "outcome",
+      "نتيجة التواصل",
+      select("outcome", options(OUTCOMES, "interested")),
     ) +
       field(
-        "outcome",
-        "نتيجة التواصل",
-        select("outcome", options(OUTCOMES, "interested")),
-      ) +
-      `<label class="checkbox wide"><input type="checkbox" name="first_reply" ${l.first_response_at ? "disabled" : ""}> ده أول رد من الفريق على استفسار العميلة ${l.first_response_at ? "(مسجل بالفعل)" : ""}</label><label class="checkbox wide"><input type="checkbox" name="is_follow_up"> التواصل ده متابعة بعد تواصل سابق</label>` +
-      field(
         "body",
-        "ملخص التواصل",
-        `<textarea id="body" name="body" required maxlength="3000" rows="4" placeholder="سجلي ما اتقال والخطوة المتفق عليها"></textarea>`,
+        "ملخص قصير",
+        `<textarea id="body" name="body" required maxlength="3000" rows="3" placeholder="إيه اللي اتقال؟ وإيه المتفق عليه؟"></textarea>`,
         true,
       ) +
+      firstBox +
       nextFields({
         ...l,
         next_action: l.first_response_at ? l.next_action : "discovery",
-      }),
+      }) +
+      `<div class="quick-days wide" role="group" aria-label="اختصار موعد المتابعة"><button type="button" data-days="1">بكرة</button><button type="button" data-days="3">بعد ٣ أيام</button><button type="button" data-days="7">بعد أسبوع</button></div>` +
+      `<details class="wide more-fields"><summary>تفاصيل تانية (الوقت: دلوقتي)</summary><div class="form-grid">` +
+      field(
+        "contact_at",
+        "وقت التواصل الفعلي — القاهرة",
+        input("contact_at", "datetime-local", localInput(), true),
+      ) +
+      (l.first_response_at
+        ? `<label class="checkbox wide"><input type="checkbox" name="first_reply" disabled> الرد الأول مسجل بالفعل</label>`
+        : "") +
+      `<label class="checkbox wide"><input type="checkbox" name="is_follow_up"> التواصل ده متابعة بعد تواصل سابق</label></div></details>`,
     (f) =>
       rpc("record_contact", {
         lid: l.id,
@@ -831,6 +850,14 @@ function contactModal(l) {
           is_follow_up: f.is_follow_up === "on",
           next_at: cairoISO(f.next_at),
         },
+      }),
+  );
+  dlg.querySelectorAll("[data-days]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        const t = localInput(Date.now() + Number(b.dataset.days) * 86400000);
+        const el = dlg.querySelector("#next_at");
+        if (el) el.value = t.slice(0, 11) + "11:00";
       }),
   );
 }
@@ -1394,6 +1421,13 @@ function bind() {
     (b) =>
       (b.onclick = () => {
         todayView = b.dataset.todayView;
+        render();
+      }),
+  );
+  document.querySelectorAll("[data-reply-select]").forEach(
+    (el) =>
+      (el.onchange = () => {
+        replyChoice[selected] = el.value;
         render();
       }),
   );
