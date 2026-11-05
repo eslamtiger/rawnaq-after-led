@@ -128,16 +128,23 @@ test("Arabic interface: navigation, empty data, profile and validated save forms
   const fill = (n, v) => (form.querySelector(`[name="${n}"]`).value = v);
   fill("name", "عميلة اختبار");
   fill("contact", "01012345678");
-  fill("source_id", "src_meta");
+  const pick = (n, v) =>
+    (form.querySelector(`[name="${n}"][value="${v}"]`).checked = true);
+  pick("source_id", "src_meta");
   fill("owner_id", own);
-  fill("service_id", "service_4plus");
+  pick("service_id", "service_4plus");
   form.dispatchEvent(new w.Event("submit", { cancelable: true }));
   await tick();
   await tick();
   assert.equal(calls[0][0], "add_lead");
   assert.equal(calls[0][1].p.contact, "+201012345678");
-  assert.ok(w.document.body.textContent.includes("سجّلت تواصل"));
+  // After adding, the guided contact flow opens on the new lead.
+  assert.ok(w.document.querySelector(".flow"));
   assert.ok(w.document.body.textContent.includes("عميلة اختبار"));
+  click("[data-flow-close]");
+  click('[data-page="leads"]');
+  click('[data-open="lead_test"]');
+  assert.ok(w.document.body.textContent.includes("ابدئي التواصل"));
 
   click('[data-act="edit"]');
   form = w.document.querySelector("#modal-form");

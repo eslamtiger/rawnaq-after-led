@@ -798,11 +798,15 @@ function openModal(title, body, onSubmit) {
   dialog.querySelectorAll("[data-close]").forEach(
     (b) =>
       (b.onclick = () => {
-        if (!mutation) dialog.close();
+        if (!mutation) {
+          afterSave = null;
+          dialog.close();
+        }
       }),
   );
   dialog.oncancel = (e) => {
     if (mutation) e.preventDefault();
+    else afterSave = null;
   };
   dialog.querySelector("form").onsubmit = async (e) => {
     e.preventDefault();
@@ -850,6 +854,10 @@ const nextFields = (l = {}) =>
 function addModal() {
   // Fast path: name, contact and source are all that is needed to save.
   // Everything else has a safe default and sits under "more details".
+  // After saving, the guided contact flow opens on the new lead.
+  afterSave = () => {
+    if (selected) startFlow(selected);
+  };
   openModal(
     "إضافة عميلة جديدة",
     field(
@@ -874,21 +882,13 @@ function addModal() {
           'dir="ltr" inputmode="tel" maxlength="160" autocomplete="off" placeholder="01xxxxxxxxx أو @username"',
         ),
       ) +
-      field(
-        "source_id",
-        "مصدر الاستفسار",
-        select("source_id", configOptions("source", "", "اختاري المصدر")),
-      ) +
+      `<fieldset class="wide chip-field"><legend>جات منين؟</legend><div class="chip-grid">${configs("source").map((c, i) => `<label class="chip-radio"><input type="radio" name="source_id" value="${esc(c.id)}" ${i === 0 ? "required" : ""}><span>${esc(c.label.replace(/ — .*/, ""))}</span></label>`).join("")}</div></fieldset>` +
+      `<fieldset class="wide chip-field"><legend>مهتمة بإيه؟</legend><div class="chip-grid">${configs("service").map((c) => `<label class="chip-radio"><input type="radio" name="service_id" value="${esc(c.id)}" ${c.id === "service_unknown" ? "checked" : ""}><span>${esc(c.label)}</span></label>`).join("")}</div></fieldset>` +
       `<details class="wide more-fields"><summary>تفاصيل إضافية (اختياري)</summary><div class="form-grid">` +
       field(
         "owner_id",
         "موظفة المبيعات",
         select("owner_id", peopleOptions(me.id)),
-      ) +
-      field(
-        "service_id",
-        "الخدمة / الاهتمام",
-        select("service_id", configOptions("service", "service_unknown")),
       ) +
       field(
         "received_at",
@@ -1597,7 +1597,7 @@ function flowView() {
   const head = `<header class="flow-head"><button class="icon-button" data-flow-close aria-label="إغلاق">${icon("close")}</button><div class="flow-title"><strong>${esc(l.name)}</strong><small>${esc(label(l.service_id))} · ${esc(label(l.source_id))}</small></div>${tempBadge(l)}</header>${bar}<p class="flow-step-name"><span>خطوة ${number(flow.step + 1)} من ${number(FLOW_STEPS.length)}</span> ${FLOW_STEPS[flow.step]}</p>`;
   let body = "";
   if (flow.step === 0) {
-    body = `${contactLinks(l)}<p class="flow-context">${lc ? `آخر مرة: ${formatDate(lc.at)} · ${esc(OUTCOMES[lc.outcome] || "")}${lc.summary ? " — " + esc(lc.summary) : ""}` : firstReply ? "أول تواصل معاها. الرد السريع أهم حاجة." : "مفيش تواصل مسجّل قبل كده."}</p><section class="flow-card"><h3>ابدئي بالرد ده</h3>${flowReply(l, flow.state)}</section>${flowChecks(l, ["base"])}`;
+    body = `${contactLinks(l)}${l.need || l.objection_id ? `<p class="flow-context need">${l.need ? `<b>الاحتياج:</b> ${esc(l.need)}` : ""}${l.need && l.objection_id ? "<br>" : ""}${l.objection_id ? `<b>الاعتراض:</b> ${esc(label(l.objection_id))}` : ""}</p>` : ""}<p class="flow-context">${lc ? `آخر مرة: ${formatDate(lc.at)} · ${esc(OUTCOMES[lc.outcome] || "")}${lc.summary ? " — " + esc(lc.summary) : ""}` : firstReply ? "أول تواصل معاها. الرد السريع أهم حاجة." : "مفيش تواصل مسجّل قبل كده."}</p><section class="flow-card"><h3>ابدئي بالرد ده</h3>${flowReply(l, flow.state)}</section>${flowChecks(l, ["base"])}`;
   } else if (flow.step === 1) {
     body = `<section class="flow-card"><h3>اختاري اللي العميلة قالته</h3>${chips("state", flowStates(l), flow.state)}</section><section class="flow-card"><h3>الرد المناسب</h3>${flowReply(l, flow.state)}</section>${flowChecks(l, ["stage", "temp", "state"])}`;
   } else {
