@@ -326,7 +326,7 @@ function reasonOf(l) {
   const late = l.next_at && Date.parse(l.next_at) < Date.now();
   const what = ACTIONS[l.next_action] || "متابعة";
   return late
-    ? `${what} موعدها عدى (${formatDate(l.next_at)})`
+    ? `${what}: متأخرة`
     : `${what} ${l.next_at ? formatDate(l.next_at) : ""}`;
 }
 function today() {
@@ -346,7 +346,7 @@ function today() {
     todayView === "kanban"
       ? kanban()
       : "";
-  return `<div class="today-head"><div><h1>اليوم</h1><p>${lateCount ? `<b class="late">${number(lateCount)}</b> متأخرة · ` : ""}${number(m.today)} متابعة النهارده</p></div><button class="primary desktop-add" data-act="add">${icon("plus")} عميلة جديدة</button></div>${todayView === "kanban" ? board : hero + list}<div class="today-foot"><button class="text-button" data-today-view="${todayView === "kanban" ? "list" : "kanban"}">${todayView === "kanban" ? "رجوع للخطوة الجاية" : "عرض كل العميلات كلوحة"}</button></div>`;
+  return `<div class="today-head"><div><h1>اليوم</h1><p class="today-counts">${lateCount ? `<span class="late-pill"><b>${number(lateCount)}</b> متأخرة</span>` : ""}<span>${number(m.today)} متابعة النهارده</span></p></div><button class="primary desktop-add" data-act="add">${icon("plus")} عميلة جديدة</button></div>${todayView === "kanban" ? board : hero + list}<div class="today-foot"><button class="text-button" data-today-view="${todayView === "kanban" ? "list" : "kanban"}">${todayView === "kanban" ? "رجوع للخطوة الجاية" : "عرض كل العميلات كلوحة"}</button></div>`;
 }
 function leadRow(l, compact = false) {
   const p = priority(l),
@@ -357,7 +357,7 @@ function leadRow(l, compact = false) {
   return `<button class="lead-row ${compact ? "compact" : ""}" data-open="${l.id}"><span class="avatar pale">${esc(l.name.charAt(0))}</span><div class="lead-main"><div><strong>${esc(l.name)}</strong>${badge(l)}${tempBadge(l)}</div><small>${esc(label(l.service_id))} · ${esc(label(l.source_id))} · ${esc(person(l.owner_id))}</small></div><div class="next ${late ? "late" : ""}"><strong>${!l.first_response_at && !TERMINAL.includes(l.stage) ? "في انتظار أول رد" : ACTIONS[l.next_action] || "الملف مغلق"}</strong><small>${l.next_at ? formatDate(l.next_at) : "—"}</small></div>${compact && p === 0 ? '<span class="dot urgent-dot"></span>' : icon("arrow")}</button>`;
 }
 function filters(includeDate = false) {
-  return `<div class="filters"><label class="search">${icon("search")}<input name="search" id="search" aria-label="بحث بالاسم أو رقم التواصل" placeholder="ابحثي بالاسم أو رقم التواصل" value="${esc(search)}"></label><select id="filter-stage" aria-label="تصفية حسب الحالة">${options(STAGES, filterStage, "كل الحالات")}</select>${me.role === "admin" ? `<select id="filter-owner" aria-label="تصفية حسب الموظفة">${options(Object.fromEntries(data.profiles.map((p) => [p.id, p.display_name])), filterOwner, "كل الموظفات")}</select>` : ""}<select id="filter-source" aria-label="تصفية حسب المصدر">${configOptions("source", filterSource, "كل المصادر")}</select>${includeDate ? `<label class="date-filter">من ${input("range-from", "date", rangeFrom)}</label><label class="date-filter">إلى ${input("range-to", "date", rangeTo)}</label>` : ""}</div>`;
+  return `<div class="filters"><label class="search">${icon("search")}<input name="search" id="search" aria-label="بحث بالاسم أو رقم التواصل" placeholder="ابحثي بالاسم أو رقم التواصل" value="${esc(search)}"></label><details class="filter-more" ${(filterStage || filterOwner || filterSource || rangeFrom || rangeTo) ? "open" : ""}><summary>تصفية النتائج</summary><div class="filter-grid"><select id="filter-stage" aria-label="تصفية حسب الحالة">${options(STAGES, filterStage, "كل الحالات")}</select>${me.role === "admin" ? `<select id="filter-owner" aria-label="تصفية حسب الموظفة">${options(Object.fromEntries(data.profiles.map((p) => [p.id, p.display_name])), filterOwner, "كل الموظفات")}</select>` : ""}<select id="filter-source" aria-label="تصفية حسب المصدر">${configOptions("source", filterSource, "كل المصادر")}</select>${includeDate ? `<label class="date-filter">من ${input("range-from", "date", rangeFrom)}</label><label class="date-filter">إلى ${input("range-to", "date", rangeTo)}</label>` : ""}</div></details></div>`;
 }
 function filtered() {
   const q = normalizeContact(search);

@@ -2935,3 +2935,18 @@ textarea {
 .switch-row{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .switch-row small{display:block;color:#6b5a78}
 .switch-row input{width:24px;height:24px}
+
+/* v0.7 review fixes */
+.today-counts{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.late-pill{background:#fbe4ee;color:#a3245a;border-radius:999px;padding:2px 10px;font-weight:600}
+.filter-more{flex-basis:100%}
+.filter-more>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:#5b3a7e;font-weight:600}
+.filter-grid{display:flex;gap:8px;flex-wrap:wrap}
+.filter-grid select{flex:1;min-width:120px}
+.flow-step .panel{border:0;box-shadow:none;padding:0;background:transparent}
+.dialog-body label,#modal label,#modal .field>label{color:#5b3a7e}
+.more-item{display:grid;grid-template-columns:28px 1fr 20px;column-gap:12px;align-items:center;width:100%}
+.more-item>span{min-width:0}
+.more-item.switch-row{grid-template-columns:1fr auto}
+.content{padding-bottom:104px}
+@media (min-width:900px){.content{padding-bottom:24px}}
