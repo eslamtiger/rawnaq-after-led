@@ -94,17 +94,20 @@ const nav = [
 const bottomNav = [
   ["today", "اليوم", "sun"],
   ["leads", "العميلات", "users"],
-  ["appointments", "الحجوزات", "calendar"],
-  ["dashboard", "اللوحة", "chart"],
   ["more", "المزيد", "menu"],
 ];
+const folds = new Set(["replies"]);
+// A collapsible section: the staff opens only what they need. State survives re-renders.
+function fold(id, title, hint, inner) {
+  return `<details class="fold" data-fold="${id}" ${folds.has(id) ? "open" : ""}><summary><span>${title}</span>${hint ? `<small>${hint}</small>` : ""}</summary><div class="fold-body">${inner}</div></details>`;
+}
 const routes = [...nav.map((n) => n[0]), "more"];
 // UI preference only (never CRM data): training notes on/off for this browser.
 function readTraining() {
   try {
-    return localStorage.getItem("rawnaq-training") !== "0";
+    return localStorage.getItem("rawnaq-training") === "1";
   } catch {
-    return true;
+    return false;
   }
 }
 function setTraining(on) {
@@ -217,7 +220,7 @@ function blank(title, body, action = "") {
   return `<div class="empty"><div class="empty-icon">${icon("users")}</div><h3>${title}</h3><p>${body}</p>${action}</div>`;
 }
 function login() {
-  root.innerHTML = `<main class="auth"><section class="auth-story"><div class="wordmark">رونق<span>RAWNAQ</span></div><div><div class="eyebrow">كل استفسار يستحق اهتمام</div><h1>متابعة أوضح.<br>تجربة أرقى.</h1><p>من أول رسالة، لحد الحجز والحضور.<br>خطوة واضحة لكل عميلة، في مكان واحد.</p></div><small>نظام متابعة العميلات · الإصدار ٠٫٢</small></section><section class="auth-form"><div class="auth-box"><span class="eyebrow">أهلًا بيكي في رونق</span><h2>دخول فريق العمل</h2><p>استخدمي حسابك المخصص لمتابعة العميلات.</p>${!configured ? `<div class="notice"><strong>تجهيز الاتصال لم يكتمل</strong><p>قاعدة البيانات وتسجيل الدخول لم يتم ربطهما بهذه النسخة بعد. لا يمكن تسجيل أو حفظ بيانات عميلات حتى اكتمال الربط.</p></div>` : `<form id="login-form">${field("email", "البريد الإلكتروني", input("email", "email", "", true, 'dir="ltr" autocomplete="username"'))}${field("password", "كلمة المرور", input("password", "password", "", true, 'dir="ltr" autocomplete="current-password" minlength="8"'))}<div class="form-error" role="alert"></div><button class="primary full" type="submit">تسجيل الدخول ${icon("arrow")}</button></form>`}<div class="auth-note">الدخول مخصص لحسابات الفريق المصرح لها.<br>لو محتاجة حساب، تواصلي مع إدارة المركز.</div></div></section></main>`;
+  root.innerHTML = `<main class="auth"><section class="auth-story"><div class="brand-logo"><img src="/brand/rawnaq-logo.png" alt="عيادات رونق للجلدية والتجميل والليزر" width="140" height="208"></div><div><div class="eyebrow">كل استفسار يستحق اهتمام</div><h1>متابعة أوضح.<br>تجربة أرقى.</h1><p>من أول رسالة، لحد الحجز والحضور.<br>خطوة واضحة لكل عميلة، في مكان واحد.</p></div><small>نظام متابعة العميلات · الإصدار ٠٫٢</small></section><section class="auth-form"><div class="auth-box"><span class="eyebrow">أهلًا بيكي في رونق</span><h2>دخول فريق العمل</h2><p>استخدمي حسابك المخصص لمتابعة العميلات.</p>${!configured ? `<div class="notice"><strong>تجهيز الاتصال لم يكتمل</strong><p>قاعدة البيانات وتسجيل الدخول لم يتم ربطهما بهذه النسخة بعد. لا يمكن تسجيل أو حفظ بيانات عميلات حتى اكتمال الربط.</p></div>` : `<form id="login-form">${field("email", "البريد الإلكتروني", input("email", "email", "", true, 'dir="ltr" autocomplete="username"'))}${field("password", "كلمة المرور", input("password", "password", "", true, 'dir="ltr" autocomplete="current-password" minlength="8"'))}<div class="form-error" role="alert"></div><button class="primary full" type="submit">تسجيل الدخول ${icon("arrow")}</button></form>`}<div class="auth-note">الدخول مخصص لحسابات الفريق المصرح لها.<br>لو محتاجة حساب، تواصلي مع إدارة المركز.</div></div></section></main>`;
   document
     .querySelector("#login-form")
     ?.addEventListener("submit", async (e) => {
@@ -265,7 +268,7 @@ async function refresh() {
 }
 function render() {
   indexData();
-  root.innerHTML = `<div class="workspace"><aside class="sidebar"><a class="wordmark" href="#today">رونق<span>RAWNAQ</span></a><div class="sidebar-caption">متابعة العميلات</div><nav aria-label="التنقل الرئيسي">${nav.map(([id, title, i]) => `<button data-page="${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><span class="avatar">${esc(me.display_name.charAt(0))}</span><div><strong>${esc(me.display_name)}</strong><small>${me.role === "admin" ? "إدارة المركز" : "موظفة المبيعات"}</small></div><button class="icon-button" data-act="logout" aria-label="تسجيل الخروج">${icon("logout")}</button></div></aside><div class="main"><header class="topbar"><div class="breadcrumb">رونق <span>/</span> ${nav.find((n) => n[0] === page)?.[1] ?? "المزيد"}</div><div class="top-actions"><span class="connection"><i></i> متصل</span><button class="icon-button" data-act="refresh" aria-label="تحديث البيانات">${icon("refresh")}</button></div></header><main class="content">${selected ? profileView() : pageView()}</main><footer>توقيت القاهرة · ${session.user.is_anonymous ? "اختبار QA مؤقت — بيانات وهمية فقط · " : ""}البيانات حسب صلاحيات حسابك <span>رونق — متابعة باهتمام</span></footer></div>${!selected && ["today", "leads", "followups"].includes(page) ? `<button class="fab" data-act="add" aria-label="تسجيل عميلة جديدة">${icon("plus")}<span>عميلة جديدة</span></button>` : ""}<nav class="bottom-nav" aria-label="التنقل السفلي">${bottomNav.map(([id, title, i]) => `<button data-page="${id}" class="${page === id || (id === "more" && ["scripts", "qa", "settings"].includes(page)) ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" && queue(data.leads).length ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav></div><dialog id="modal" aria-labelledby="modal-title"></dialog>`;
+  root.innerHTML = `<div class="workspace"><aside class="sidebar"><a class="brand-logo" href="#today" aria-label="عيادات رونق — الرئيسية"><img src="/brand/rawnaq-logo.png" alt="عيادات رونق للجلدية والتجميل والليزر" width="140" height="208"></a><div class="sidebar-caption">متابعة العميلات</div><nav aria-label="التنقل الرئيسي">${nav.map(([id, title, i]) => `<button data-page="${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><span class="avatar">${esc(me.display_name.charAt(0))}</span><div><strong>${esc(me.display_name)}</strong><small>${me.role === "admin" ? "إدارة المركز" : "موظفة المبيعات"}</small></div><button class="icon-button" data-act="logout" aria-label="تسجيل الخروج">${icon("logout")}</button></div></aside><div class="main"><header class="topbar"><div class="breadcrumb">رونق <span>/</span> ${nav.find((n) => n[0] === page)?.[1] ?? "المزيد"}</div><div class="top-actions"><span class="connection"><i></i> متصل</span><button class="icon-button" data-act="refresh" aria-label="تحديث البيانات">${icon("refresh")}</button></div></header><main class="content">${selected ? profileView() : pageView()}</main><footer>توقيت القاهرة · ${session.user.is_anonymous ? "اختبار QA مؤقت — بيانات وهمية فقط · " : ""}البيانات حسب صلاحيات حسابك <span>رونق — متابعة باهتمام</span></footer></div>${!selected && ["today", "leads", "followups"].includes(page) ? `<button class="fab" data-act="add" aria-label="تسجيل عميلة جديدة">${icon("plus")}<span>عميلة جديدة</span></button>` : ""}<nav class="bottom-nav" aria-label="التنقل السفلي">${bottomNav.map(([id, title, i]) => `<button data-page="${id}" class="${page === id || (id === "more" && ["followups", "appointments", "dashboard", "scripts", "qa", "settings"].includes(page)) ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" && queue(data.leads).length ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav></div><dialog id="modal" aria-labelledby="modal-title"></dialog>`;
   bind();
 }
 function heading(k, title, sub, action = "") {
@@ -289,6 +292,8 @@ function pageView() {
 function morePage() {
   const items = [
     ["followups", "المتابعات", "كل المتابعات: متأخر واليوم والقادم", "clock"],
+    ["appointments", "الحجوزات", "المواعيد القادمة وتسجيل الحضور", "calendar"],
+    ["dashboard", "لوحة المتابعة", "أرقام الأداء والقمع", "chart"],
     ["scripts", "دليل التواصل", "القوالب والردود على الاعتراضات", "book"],
     ["qa", "الجودة والتدريب", "مراجعات التواصل ومعايير الجودة", "check"],
     ["settings", "الإعدادات", "المصادر والقوالب وفريق العمل", "settings"],
@@ -314,47 +319,33 @@ function kanban() {
     })
     .join("")}</div>`;
 }
+function reasonOf(l) {
+  if (!l.first_response_at && !TERMINAL.includes(l.stage))
+    return "استفسار بدون رد، الرد الأول أهم خطوة";
+  const late = l.next_at && Date.parse(l.next_at) < Date.now();
+  const what = ACTIONS[l.next_action] || "متابعة";
+  return late
+    ? `${what} موعدها عدى (${formatDate(l.next_at)})`
+    : `${what} ${l.next_at ? formatDate(l.next_at) : ""}`;
+}
 function today() {
   const now = Date.now(),
     m = metrics(data.leads, data.appointments, now),
-    todayApps = data.appointments.filter(
-      (a) => cairoDay(a.starts_at) === cairoDay() && a.status !== "cancelled",
-    ),
     q = queue(data.leads, now),
-    late = q.filter((l) => priority(l, now) <= 1),
-    rest = q.filter((l) => priority(l, now) >= 2),
-    toggle = `<div class="view-toggle" role="group" aria-label="طريقة العرض"><button data-today-view="list" aria-pressed="${todayView === "list"}" class="${todayView === "list" ? "primary" : ""}">${icon("list")} قائمة</button><button data-today-view="kanban" aria-pressed="${todayView === "kanban"}" class="${todayView === "kanban" ? "primary" : ""}">${icon("board")} لوحة</button></div>`;
-  const lists = `<section class="panel overdue-panel ${late.length ? "has-late" : ""}"><div class="panel-head"><div><h2>متأخر — ابدئي من هنا</h2><p>استفسارات بدون رد ومتابعات موعدها عدى</p></div><span class="count">${number(late.length)}</span></div>${
-    late.length
-      ? late
-          .slice(0, 15)
-          .map((l) => leadRow(l, true))
-          .join("")
-      : blank("لا يوجد متأخر", "كل المتابعات في وقتها.")
-  }</section><section class="panel"><div class="panel-head"><div><h2>النهارده</h2><p>المتبقي من متابعات اليوم والجاهزات للحجز</p></div><span class="count">${number(rest.length)}</span></div>${
-    rest.length
-      ? rest
-          .slice(0, 15)
-          .map((l) => leadRow(l, true))
-          .join("")
-      : blank("لا توجد متابعات أخرى اليوم", "راجعي قائمة العميلات عند الحاجة.")
-  }<button class="text-button panel-link" data-page="followups">كل المتابعات ${icon("arrow")}</button></section>`;
-  const appts = `<section class="panel appointment-mini"><div class="panel-head"><h2>مواعيد النهارده</h2>${icon("calendar")}</div>${
-    todayApps.length
-      ? todayApps
-          .slice(0, 5)
-          .map(
-            (a) =>
-              `<button class="appointment-item" data-open="${a.lead_id}"><span class="time">${new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", timeStyle: "short" }).format(new Date(a.starts_at))}</span><div><strong>${esc(data.leads.find((l) => l.id === a.lead_id)?.name)}</strong><small>${APPOINTMENTS[a.status]}</small></div>${icon("arrow")}</button>`,
-          )
-          .join("")
-      : blank("لا توجد مواعيد اليوم", "الحجوزات المسجلة هتظهر هنا تلقائيًا.")
-  }</section>`;
-  return `${heading(formatDate(new Date(), false), "متابعات اليوم", `${esc(me.display_name)}، المتأخر أولًا ثم متابعات النهارده.`, addButton())}<div class="today-bar">${toggle}<span class="today-counts"><b class="${m.overdue + m.unanswered ? "late" : ""}">${number(m.overdue + m.unanswered)}</b> متأخر · <b>${number(m.today)}</b> النهارده · <b>${number(todayApps.length)}</b> موعد</span></div>${
+    first = q[0],
+    others = q.slice(1, 8),
+    lateCount = m.overdue + m.unanswered;
+  const hero = first
+    ? `<section class="next-card ${priority(first, now) <= 1 ? "is-late" : ""}" aria-label="الخطوة الجاية"><span class="next-kicker">${priority(first, now) <= 1 ? "ابدئي بيها دلوقتي" : "الخطوة الجاية"}</span><h2>${esc(first.name)}</h2><p class="next-why">${esc(reasonOf(first))}</p><p class="next-meta">${esc(label(first.service_id))} · ${esc(label(first.source_id))}</p><button class="primary big" data-open="${first.id}">افتحي الملف</button></section>`
+    : `<section class="next-card calm"><h2>مفيش متابعات مستنياكي</h2><p class="next-why">كل المتابعات في وقتها. لو وصلك استفسار جديد، سجّليه من الزر الوردي.</p></section>`;
+  const list = others.length
+    ? `<section class="then"><h3>بعدها <span>${number(Math.max(q.length - 1, 0))}</span></h3>${others.map((l) => `<button class="then-row" data-open="${l.id}"><span class="then-main"><strong>${esc(l.name)}</strong><small>${esc(reasonOf(l))}</small></span>${tempBadge(l)}${icon("arrow")}</button>`).join("")}${q.length > 8 ? `<button class="text-button panel-link" data-page="followups">كل المتابعات (${number(q.length)}) ${icon("arrow")}</button>` : ""}</section>`
+    : "";
+  const board =
     todayView === "kanban"
       ? kanban()
-      : `<div class="today-grid"><div class="today-main">${lists}</div><aside class="side-stack">${appts}</aside></div>`
-  }`;
+      : "";
+  return `<div class="today-head"><div><h1>اليوم</h1><p>${lateCount ? `<b class="late">${number(lateCount)}</b> متأخرة · ` : ""}${number(m.today)} متابعة النهارده</p></div><button class="primary desktop-add" data-act="add">${icon("plus")} عميلة جديدة</button></div>${todayView === "kanban" ? board : hero + list}<div class="today-foot"><button class="text-button" data-today-view="${todayView === "kanban" ? "list" : "kanban"}">${todayView === "kanban" ? "رجوع للخطوة الجاية" : "عرض كل العميلات كلوحة"}</button></div>`;
 }
 function leadRow(l, compact = false) {
   const p = priority(l),
@@ -421,7 +412,15 @@ function profileView() {
       .filter((a) => a.lead_id === l.id && a.kind !== "checklist")
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
     closed = TERMINAL.includes(l.stage);
-  return `<button class="text-button back" data-act="back">→ رجوع للقائمة</button>${heading("ملف العميلة", esc(l.name), `${esc(label(l.service_id))} · ${esc(label(l.source_id))}`, badge(l))}${briefHtml(l)}<div class="profile-grid"><section class="profile-main"><section class="panel"><div class="panel-head"><h2>الخطوة القادمة</h2>${!closed ? `<button class="text-button" data-act="edit">تحديث البيانات</button>` : ""}</div><div class="action-box ${l.next_at && Date.parse(l.next_at) < Date.now() ? "overdue" : ""}"><div>${icon("clock")}<h3>${ACTIONS[l.next_action] || "الملف مغلق"}</h3></div><p>${l.next_at ? formatDate(l.next_at) : "لا توجد متابعة مفتوحة"}</p><small>${esc(l.need) || "ملخص الاحتياج لم يُسجل بعد."}</small></div><div class="profile-actions">${closed ? '<button class="primary" data-act="reopen">إعادة فتح الملف</button>' : `<button class="primary" data-act="contact">تسجيل تواصل</button><button data-act="edit">تحديث الحالة</button><button data-act="book">${icon("calendar")} ${l.stage === "no_show" ? "إعادة الحجز" : "تثبيت حجز"}</button>${l.stage === "no_show" ? `<button data-act="recover-followup">متابعة</button><button data-act="recover-lost">إغلاق كـ Lost</button>` : ""}${!l.booking_offered_at ? `<button data-act="offer">تم عرض الحجز</button>` : `<span class="badge">عُرض الحجز ${formatDate(l.booking_offered_at)}</span>`}`}</div></section>${repliesPanel(l)}${checklistPanel(l)}<section class="panel"><div class="panel-head"><h2>الحجوزات</h2><span class="count">${number(apps.length)}</span></div>${
+  const lateNow = l.next_at && Date.parse(l.next_at) < Date.now();
+  const cs = checklistState(l);
+  const primary = closed
+    ? '<button class="primary big" data-act="reopen">إعادة فتح الملف</button>'
+    : '<button class="primary big" data-act="contact">تسجيل تواصل</button>';
+  const more = closed
+    ? ""
+    : `<details class="more-actions"><summary>إجراءات أخرى</summary><div class="profile-actions"><button data-act="edit">تحديث الحالة</button><button data-act="book">${icon("calendar")} ${l.stage === "no_show" ? "إعادة الحجز" : "تثبيت حجز"}</button>${l.stage === "no_show" ? `<button data-act="recover-followup">متابعة</button><button data-act="recover-lost">إغلاق كـ Lost</button>` : ""}${!l.booking_offered_at ? `<button data-act="offer">تم عرض الحجز</button>` : `<span class="badge">عُرض الحجز ${formatDate(l.booking_offered_at)}</span>`}</div></details>`;
+  return `<button class="text-button back" data-act="back">→ رجوع</button><div class="file-head"><div><h1>${esc(l.name)}</h1><p>${esc(label(l.service_id))} · ${esc(label(l.source_id))}</p></div>${tempBadge(l)}</div><section class="step-card ${lateNow ? "is-late" : ""}"><span class="next-kicker">الخطوة القادمة</span><h2>${ACTIONS[l.next_action] || "الملف مغلق"}</h2><p class="next-why">${l.next_at ? formatDate(l.next_at) : "لا توجد متابعة مفتوحة"}</p>${l.need ? `<p class="next-meta">${esc(l.need)}</p>` : '<p class="next-meta">ملخص الاحتياج لم يُسجل بعد.</p>'}${primary}${more}</section>${fold("replies", "الرد المناسب", "اختاري حالة العميلة وانسخي", repliesPanel(l))}${fold("brief", "ملخص العميلة", "", briefHtml(l))}${fold("checklist", "قائمة المتابعة", `${number(cs.progress.complete)} من ${number(cs.progress.total)}`, checklistPanel(l))}${fold("bookings", "الحجوزات", number(apps.length), `<div class="fold-plain">${
     apps.length
       ? apps
           .map(
@@ -443,7 +442,7 @@ function profileView() {
           "لم يتم تسجيل حجز",
           "بعد وضوح الاحتياج وعرض الحجز، ثبّتي الموعد المتفق عليه.",
         )
-  }</section><section class="panel"><div class="panel-head"><h2>تاريخ المتابعة</h2><span class="count">${number(history.length)}</span></div><ol class="timeline">${history.map((a) => `<li><div class="timeline-dot"></div><div><strong>${esc(a.body)}</strong><p>${esc(person(a.actor_id))} · ${formatDate(a.created_at)}</p>${activityDetails(a)}${a.details.outcome ? `<span class="badge">${OUTCOMES[a.details.outcome] || ""}</span>` : ""}${a.details.stage ? `<small>الحالة: ${STAGES[a.details.previous_stage]} ← ${STAGES[a.details.stage]}</small>` : ""}${a.details.status ? `<small>الحجز: ${APPOINTMENTS[a.details.status]}</small>` : ""}${a.details.starts_at ? `<small>${formatDate(a.details.starts_at)}</small>` : ""}${a.details.note ? `<small>${esc(a.details.note)}</small>` : ""}${a.details.contact_at ? `<small>وقت التواصل: ${formatDate(a.details.contact_at)}</small>` : ""}</div></li>`).join("")}</ol></section></section><aside class="side-stack"><section class="panel profile-info"><div class="panel-head"><h2>بيانات العميلة</h2><button data-act="identity">تصحيح البيانات</button></div><dl><dt>رقم / معرف التواصل</dt><dd><bdi dir="ltr">${esc(l.contact)}</bdi></dd><dt>الموظفة المسؤولة</dt><dd>${esc(person(l.owner_id))}</dd><dt>حالة العميلة</dt><dd>${STAGES[l.stage]}</dd><dt>التأهيل</dt><dd>${QUALIFICATIONS[l.qualification]}</dd><dt>درجة الاهتمام</dt><dd>${GRADES[l.grade] || "لم يُقيّم"}</dd><dt>تاريخ الاستفسار</dt><dd>${formatDate(l.received_at)}</dd><dt>أول رد</dt><dd>${l.first_response_at ? formatDate(l.first_response_at) : "لم يُسجل"}</dd><dt>الحملة</dt><dd>${esc(l.campaign) || "غير محددة"}</dd><dt>الاعتراض الرئيسي</dt><dd>${esc(label(l.objection_id))}</dd><dt>عدد المتابعات المسجلة</dt><dd>${number(l.follow_up_count)}</dd>${l.lost_reason_id ? `<dt>سبب الفقد</dt><dd>${esc(label(l.lost_reason_id))}</dd>` : ""}<dt>آخر ملاحظة</dt><dd>${esc(l.note) || "لا توجد"}</dd></dl></section><section class="tip"><div class="tip-label">قبل التواصل</div><p>${esc(configs("script").find((s) => s.id === (l.objection_id ? "script_think" : "script_followup"))?.body || "راجعي تاريخ العميلة قبل المتابعة.")}</p><button class="text-button" data-page="scripts">دليل التواصل ${icon("arrow")}</button></section></aside></div>`;
+  }</div>`)}${fold("history", "تاريخ المتابعة", number(history.length), `<ol class="timeline">${history.map((a) => `<li><div class="timeline-dot"></div><div><strong>${esc(a.body)}</strong><p>${esc(person(a.actor_id))} · ${formatDate(a.created_at)}</p>${activityDetails(a)}${a.details.outcome ? `<span class="badge">${OUTCOMES[a.details.outcome] || ""}</span>` : ""}${a.details.stage ? `<small>الحالة: ${STAGES[a.details.previous_stage]} ← ${STAGES[a.details.stage]}</small>` : ""}${a.details.status ? `<small>الحجز: ${APPOINTMENTS[a.details.status]}</small>` : ""}${a.details.starts_at ? `<small>${formatDate(a.details.starts_at)}</small>` : ""}${a.details.note ? `<small>${esc(a.details.note)}</small>` : ""}${a.details.contact_at ? `<small>وقت التواصل: ${formatDate(a.details.contact_at)}</small>` : ""}</div></li>`).join("")}</ol>`)}${fold("info", "بيانات العميلة", "", `<div class="profile-info"><dl><dt>رقم / معرف التواصل</dt><dd><bdi dir="ltr">${esc(l.contact)}</bdi></dd><dt>الموظفة المسؤولة</dt><dd>${esc(person(l.owner_id))}</dd><dt>حالة العميلة</dt><dd>${STAGES[l.stage]}</dd><dt>التأهيل</dt><dd>${QUALIFICATIONS[l.qualification]}</dd><dt>درجة الاهتمام</dt><dd>${GRADES[l.grade] || "لم يُقيّم"}</dd><dt>تاريخ الاستفسار</dt><dd>${formatDate(l.received_at)}</dd><dt>أول رد</dt><dd>${l.first_response_at ? formatDate(l.first_response_at) : "لم يُسجل"}</dd><dt>الحملة</dt><dd>${esc(l.campaign) || "غير محددة"}</dd><dt>الاعتراض الرئيسي</dt><dd>${esc(label(l.objection_id))}</dd><dt>عدد المتابعات المسجلة</dt><dd>${number(l.follow_up_count)}</dd>${l.lost_reason_id ? `<dt>سبب الفقد</dt><dd>${esc(label(l.lost_reason_id))}</dd>` : ""}<dt>آخر ملاحظة</dt><dd>${esc(l.note) || "لا توجد"}</dd></dl><button data-act="identity">تصحيح البيانات</button></div>`)}`;
 }
 const LAYER_TITLES = {
   base: "الأساس",
@@ -1336,6 +1335,11 @@ function go(target) {
 }
 let checkTimer;
 function bind() {
+  document.querySelectorAll("details[data-fold]").forEach((d) =>
+    d.addEventListener("toggle", () => {
+      d.open ? folds.add(d.dataset.fold) : folds.delete(d.dataset.fold);
+    }),
+  );
   document.querySelectorAll("[data-queue]").forEach(
     (b) =>
       (b.onclick = () => {
