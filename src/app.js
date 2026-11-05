@@ -63,6 +63,7 @@ let session = null,
   },
   page = "today",
   afterSave = null,
+  flow = null,
   selected = null,
   search = "",
   filterStage = "",
@@ -95,6 +96,8 @@ const nav = [
 const bottomNav = [
   ["today", "اليوم", "sun"],
   ["leads", "العميلات", "users"],
+  ["add", "جديدة", "plus"],
+  ["followups", "المتابعات", "clock"],
   ["more", "المزيد", "menu"],
 ];
 const folds = new Set(["replies"]);
@@ -145,6 +148,7 @@ const icons = {
     '<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="10" rx="1"/><rect x="17" y="4" width="4" height="13" rx="1"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/>',
 };
 const icon = (n) =>
   `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[n] || icons.check}</svg>`;
@@ -303,7 +307,7 @@ async function refresh() {
 }
 function render() {
   indexData();
-  root.innerHTML = `<div class="workspace"><aside class="sidebar"><a class="brand-logo" href="#today" aria-label="عيادات رونق — الرئيسية"><img src="/brand/rawnaq-logo.png" alt="عيادات رونق للجلدية والتجميل والليزر" width="140" height="208"></a><div class="sidebar-caption">متابعة العميلات</div><nav aria-label="التنقل الرئيسي">${nav.map(([id, title, i]) => `<button data-page="${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><span class="avatar">${esc(me.display_name.charAt(0))}</span><div><strong>${esc(me.display_name)}</strong><small>${me.role === "admin" ? "إدارة المركز" : "موظفة المبيعات"}</small></div><button class="icon-button" data-act="logout" aria-label="${qaAnonymous ? "تغيير الشخص" : "تسجيل الخروج"}">${icon("logout")}</button></div></aside><div class="main"><header class="topbar"><div class="breadcrumb">رونق <span>/</span> ${nav.find((n) => n[0] === page)?.[1] ?? "المزيد"}</div><div class="top-actions"><span class="connection"><i></i> متصل</span><button class="icon-button" data-act="refresh" aria-label="تحديث البيانات">${icon("refresh")}</button></div></header><main class="content">${selected ? profileView() : pageView()}</main><footer>توقيت القاهرة · ${session.user.is_anonymous ? "اختبار QA مؤقت — بيانات وهمية فقط · " : ""}البيانات حسب صلاحيات حسابك <span>رونق — متابعة باهتمام</span></footer></div>${!selected && ["today", "leads", "followups"].includes(page) ? `<button class="fab" data-act="add" aria-label="تسجيل عميلة جديدة">${icon("plus")}<span>عميلة جديدة</span></button>` : ""}<nav class="bottom-nav" aria-label="التنقل السفلي">${bottomNav.map(([id, title, i]) => `<button data-page="${id}" class="${page === id || (id === "more" && ["followups", "appointments", "dashboard", "scripts", "qa", "settings"].includes(page)) ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" && queue(data.leads).length ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav></div><dialog id="modal" aria-labelledby="modal-title"></dialog>`;
+  root.innerHTML = `<div class="workspace ${flow && flow.lid === selected ? "in-flow" : ""}"><aside class="sidebar"><a class="brand-logo" href="#today" aria-label="عيادات رونق — الرئيسية"><img src="/brand/rawnaq-logo.png" alt="عيادات رونق للجلدية والتجميل والليزر" width="140" height="208"></a><div class="sidebar-caption">متابعة العميلات</div><nav aria-label="التنقل الرئيسي">${nav.map(([id, title, i]) => `<button data-page="${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><span class="avatar">${esc(me.display_name.charAt(0))}</span><div><strong>${esc(me.display_name)}</strong><small>${me.role === "admin" ? "إدارة المركز" : "موظفة المبيعات"}</small></div><button class="icon-button" data-act="logout" aria-label="${qaAnonymous ? "تغيير الشخص" : "تسجيل الخروج"}">${icon("logout")}</button></div></aside><div class="main"><header class="topbar"><div class="breadcrumb">رونق <span>/</span> ${nav.find((n) => n[0] === page)?.[1] ?? "المزيد"}</div><div class="top-actions"><span class="connection"><i></i> متصل</span><button class="icon-button" data-act="refresh" aria-label="تحديث البيانات">${icon("refresh")}</button></div></header><main class="content">${selected ? (flow && flow.lid === selected ? flowView() : profileView()) : pageView()}</main><footer>توقيت القاهرة · ${session.user.is_anonymous ? "اختبار QA مؤقت — بيانات وهمية فقط · " : ""}البيانات حسب صلاحيات حسابك <span>رونق — متابعة باهتمام</span></footer></div>${!selected && ["today", "leads", "followups"].includes(page) ? `<button class="fab" data-act="add" aria-label="تسجيل عميلة جديدة">${icon("plus")}<span>عميلة جديدة</span></button>` : ""}<nav class="bottom-nav" aria-label="التنقل السفلي">${bottomNav.map(([id, title, i]) => id === "add" ? `<button class="nav-add" data-act="add" aria-label="تسجيل عميلة جديدة"><span class="nav-add-dot">${icon(i)}</span><span>${title}</span></button>` : `<button data-page="${id}" class="${!selected && (page === id || (id === "more" && ["appointments", "dashboard", "scripts", "qa", "settings"].includes(page))) ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" && queue(data.leads).length ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav></div><dialog id="modal" aria-labelledby="modal-title"></dialog>`;
   bind();
 }
 function heading(k, title, sub, action = "") {
@@ -371,10 +375,10 @@ function today() {
     others = q.slice(1, 8),
     lateCount = m.overdue + m.unanswered;
   const hero = first
-    ? `<section class="next-card ${priority(first, now) <= 1 ? "is-late" : ""}" aria-label="الخطوة الجاية"><span class="next-kicker">${priority(first, now) <= 1 ? "ابدئي بيها دلوقتي" : "الخطوة الجاية"}</span><h2>${esc(first.name)}</h2><p class="next-why">${esc(reasonOf(first))}</p><p class="next-meta">${esc(label(first.service_id))} · ${esc(label(first.source_id))}</p><button class="primary big" data-open="${first.id}">افتحي الملف</button></section>`
+    ? `<section class="next-card ${priority(first, now) <= 1 ? "is-late" : ""}" aria-label="الخطوة الجاية"><span class="next-kicker">${priority(first, now) <= 1 ? "ابدئي بيها دلوقتي" : "الخطوة الجاية"}</span><h2>${esc(first.name)}</h2><p class="next-why">${esc(reasonOf(first))}</p><p class="next-meta">${esc(label(first.service_id))} · ${esc(label(first.source_id))}</p><button class="primary big" data-flow-start="${first.id}">ابدئي التواصل</button><button class="text-button" data-open="${first.id}">الملف كامل</button></section>`
     : `<section class="next-card calm"><h2>مفيش متابعات مستنياكي</h2><p class="next-why">كل المتابعات في وقتها. لو وصلك استفسار جديد، سجّليه من الزر الوردي.</p></section>`;
   const list = others.length
-    ? `<section class="then"><h3>بعدها <span>${number(Math.max(q.length - 1, 0))}</span></h3>${others.map((l) => `<button class="then-row" data-open="${l.id}"><span class="then-main"><strong>${esc(l.name)}</strong><small>${esc(reasonOf(l))}</small></span>${tempBadge(l)}${icon("arrow")}</button>`).join("")}${q.length > 8 ? `<button class="text-button panel-link" data-page="followups">كل المتابعات (${number(q.length)}) ${icon("arrow")}</button>` : ""}</section>`
+    ? `<section class="then"><h3>بعدها <span>${number(Math.max(q.length - 1, 0))}</span></h3>${others.map((l) => `<button class="then-row" data-flow-start="${l.id}"><span class="then-main"><strong>${esc(l.name)}</strong><small>${esc(reasonOf(l))}</small></span>${tempBadge(l)}${icon("arrow")}</button>`).join("")}${q.length > 8 ? `<button class="text-button panel-link" data-page="followups">كل المتابعات (${number(q.length)}) ${icon("arrow")}</button>` : ""}</section>`
     : "";
   const board =
     todayView === "kanban"
@@ -482,7 +486,7 @@ function profileView() {
           "بعد وضوح الاحتياج وعرض الحجز، ثبّتي الموعد المتفق عليه.",
         )
   }</div>`)}${fold("history", "تاريخ المتابعة", number(history.length), `<ol class="timeline">${history.map((a) => `<li><div class="timeline-dot"></div><div><strong>${esc(a.body)}</strong><p>${esc(person(a.actor_id))} · ${formatDate(a.created_at)}</p>${activityDetails(a)}${a.details.outcome ? `<span class="badge">${OUTCOMES[a.details.outcome] || ""}</span>` : ""}${a.details.stage ? `<small>الحالة: ${STAGES[a.details.previous_stage]} ← ${STAGES[a.details.stage]}</small>` : ""}${a.details.status ? `<small>الحجز: ${APPOINTMENTS[a.details.status]}</small>` : ""}${a.details.starts_at ? `<small>${formatDate(a.details.starts_at)}</small>` : ""}${a.details.note ? `<small>${esc(a.details.note)}</small>` : ""}${a.details.contact_at ? `<small>وقت التواصل: ${formatDate(a.details.contact_at)}</small>` : ""}</div></li>`).join("")}</ol>`)}${fold("info", "بيانات العميلة", "", `<div class="profile-info"><dl><dt>رقم / معرف التواصل</dt><dd><bdi dir="ltr">${esc(l.contact)}</bdi></dd><dt>الموظفة المسؤولة</dt><dd>${esc(person(l.owner_id))}</dd><dt>حالة العميلة</dt><dd>${STAGES[l.stage]}</dd><dt>التأهيل</dt><dd>${QUALIFICATIONS[l.qualification]}</dd><dt>درجة الاهتمام</dt><dd>${GRADES[l.grade] || "لم يُقيّم"}</dd><dt>تاريخ الاستفسار</dt><dd>${formatDate(l.received_at)}</dd><dt>أول رد</dt><dd>${l.first_response_at ? formatDate(l.first_response_at) : "لم يُسجل"}</dd><dt>الحملة</dt><dd>${esc(l.campaign) || "غير محددة"}</dd><dt>الاعتراض الرئيسي</dt><dd>${esc(label(l.objection_id))}</dd><dt>عدد المتابعات المسجلة</dt><dd>${number(l.follow_up_count)}</dd>${l.lost_reason_id ? `<dt>سبب الفقد</dt><dd>${esc(label(l.lost_reason_id))}</dd>` : ""}<dt>آخر ملاحظة</dt><dd>${esc(l.note) || "لا توجد"}</dd></dl><button data-act="identity">تصحيح البيانات</button></div>`)}`;
-  return `<button class="text-button back" data-act="back">→ رجوع</button><div class="file-head"><div><h1>${esc(l.name)}</h1><p>${esc(label(l.service_id))} · ${esc(label(l.source_id))}</p></div>${tempBadge(l)}</div><section class="recap ${lateNow ? "is-late" : ""}"><dl><div><dt>آخر ما حصل</dt><dd>${lastLine}</dd></div><div><dt>الاحتياج</dt><dd>${esc(l.need) || "لسه ماتسجلش"}</dd></div></dl></section>${closed ? `<section class="step-card"><h2>الملف مغلق</h2><button class="primary big" data-act="reopen">إعادة فتح الملف</button></section>` : `<section class="flow-step"><h2><span class="step-no">١</span> ردّي على العميلة</h2>${repliesPanel(l)}</section><section class="flow-step"><h2><span class="step-no">٢</span> سجّلي اللي حصل</h2><p class="next-why">الجاي بعد كده: ${nextLine}</p><button class="primary big" data-act="contact">سجّلت تواصل</button>${more}</section>`}<details class="fold-all" ${folds.has("all") ? "open" : ""} data-fold="all"><summary>تفاصيل أكتر <small>الخطوات والحجوزات والتاريخ</small></summary><div class="fold-all-body">${detailsInner}</div></details>`;
+  return `<button class="text-button back" data-act="back">→ رجوع</button><div class="file-head"><div><h1>${esc(l.name)}</h1><p>${esc(label(l.service_id))} · ${esc(label(l.source_id))}</p></div>${tempBadge(l)}</div><section class="recap ${lateNow ? "is-late" : ""}"><dl><div><dt>آخر ما حصل</dt><dd>${lastLine}</dd></div><div><dt>الاحتياج</dt><dd>${esc(l.need) || "لسه ماتسجلش"}</dd></div></dl></section>${closed ? `<section class="step-card"><h2>الملف مغلق</h2><button class="primary big" data-act="reopen">إعادة فتح الملف</button></section>` : `<section class="step-card start-card"><p class="next-why">الجاي: ${nextLine}</p><button class="primary big" data-flow-start="${l.id}">ابدئي التواصل</button><button class="text-button" data-act="contact">تسجيل سريع من غير خطوات</button>${more}</section>`}<details class="fold-all" ${folds.has("all") ? "open" : ""} data-fold="all"><summary>تفاصيل أكتر <small>الخطوات والحجوزات والتاريخ</small></summary><div class="fold-all-body">${detailsInner}</div></details>`;
 }
 const LAYER_TITLES = {
   base: "الأساس",
@@ -1380,8 +1384,264 @@ function exportResults() {
   URL.revokeObjectURL(url);
   toast("تم تصدير النتائج الظاهرة حسب صلاحياتك");
 }
+
+// ---- Guided contact flow: one lead, three steps, mostly taps ----
+const FLOW_STEPS = ["ابدئي", "العميلة قالت إيه؟", "النتيجة"];
+const FLOW_DAYS = [
+  ["2h", "بعد ساعتين"],
+  ["1", "بكرة"],
+  ["3", "بعد ٣ أيام"],
+  ["7", "بعد أسبوع"],
+  ["custom", "يوم تاني"],
+];
+const OUTCOME_DEFAULTS = {
+  interested: "1",
+  information: "1",
+  later: "3",
+  no_answer: "1",
+  refused: "7",
+};
+function startFlow(id) {
+  const l = data.leads.find((x) => x.id === id);
+  if (!l) return;
+  selected = id;
+  if (TERMINAL.includes(l.stage)) {
+    flow = null;
+  } else {
+    const cs = checklistState(l);
+    flow = {
+      lid: id,
+      step: 0,
+      state: replyChoice[id] || defaultReplyState(l, tempOf(l)),
+      done: { ...cs.done },
+      key: cs.key,
+      outcome: "",
+      next: "",
+      days: "",
+      custom: "",
+      note: "",
+    };
+    replyChoice[id] = flow.state;
+  }
+  render();
+  window.scrollTo(0, 0);
+}
+function contactLinks(l) {
+  const raw = String(l.contact || "").replace(/[\s-]/g, "");
+  let digits = raw.replace(/^\+/, "");
+  if (/^01[0125]\d{8}$/.test(digits)) digits = "2" + digits;
+  if (!/^\d{7,15}$/.test(digits)) return "";
+  return `<div class="flow-contact"><a class="contact-btn" href="tel:+${digits}">${icon("phone")} اتصال</a><a class="contact-btn wa" href="https://wa.me/${digits}" target="_blank" rel="noopener">${icon("chat")} واتساب</a></div>`;
+}
+function flowChecks(l, layers) {
+  const items = buildChecklist(l, tempOf(l), {
+    followUpCount: l.follow_up_count,
+    objectionLabel: label(l.objection_id),
+  }).filter((i) => layers.includes(i.layer));
+  if (!items.length) return "";
+  return `<div class="flow-checks"><h3>علّمي اللي عملتيه</h3>${items
+    .map(
+      (i) =>
+        `<button type="button" class="tick ${flow.done[i.id] ? "on" : ""}" data-flow-tick="${esc(i.id)}" aria-pressed="${!!flow.done[i.id]}"><span class="tick-box">${flow.done[i.id] ? icon("check") : ""}</span><span>${esc(i.label)}${training && i.why ? `<small>${esc(i.why)}</small>` : ""}</span></button>`,
+    )
+    .join("")}</div>`;
+}
+function chips(name, entries, current) {
+  return `<div class="chip-grid" role="group">${entries
+    .map(
+      ([k, v]) =>
+        `<button type="button" class="chip ${k === current ? "on" : ""}" data-flow-${name}="${esc(k)}" aria-pressed="${k === current}">${esc(v)}</button>`,
+    )
+    .join("")}</div>`;
+}
+function flowStates(l) {
+  const hide = new Set();
+  if (!["booked"].includes(l.stage)) hide.add("s8");
+  if (l.stage !== "no_show") hide.add("s9");
+  if (l.stage !== "attended") hide.add("s11");
+  return Object.entries(REPLY_STATES).filter(
+    ([k]) => !hide.has(k) || k === flow.state,
+  );
+}
+function flowReply(l, state) {
+  const t = tempOf(l),
+    replies = pickReplies(data.config, {
+      state,
+      temp: t.temp,
+      objectionId: state === "s6" ? l.objection_id : null,
+    }),
+    vars = replyVars(l);
+  const [best, ...others] = replies;
+  if (!best)
+    return `<p class="flow-empty">مفيش رد جاهز للحالة دي لسه. اكتبي ردك بنفسك.</p>`;
+  return `${replyCard(best, vars)}${others.length ? `<details class="more-replies"><summary>ردود تانية (${number(others.length)})</summary>${others.map((r) => replyCard(r, vars)).join("")}</details>` : ""}`;
+}
+function flowNextAt() {
+  if (flow.days === "custom") return flow.custom;
+  if (flow.days === "2h") return localInput(Date.now() + 2 * 3600e3);
+  if (!flow.days) return "";
+  const t = localInput(Date.now() + Number(flow.days) * 86400000);
+  return t.slice(0, 11) + "11:00";
+}
+function flowSummary(l) {
+  const parts = [];
+  if (flow.outcome) parts.push(OUTCOMES[flow.outcome]);
+  if (flow.state) parts.push("قالت: " + REPLY_STATES[flow.state]);
+  if (flow.next) parts.push("الجاي: " + ACTIONS[flow.next]);
+  return parts.join(" · ");
+}
+function flowView() {
+  const l = data.leads.find((x) => x.id === flow.lid);
+  if (!l) {
+    flow = null;
+    return pageView();
+  }
+  const firstReply = !l.first_response_at;
+  const lc = contacts.get(l.id);
+  const bar = `<div class="flow-progress" aria-label="خطوة ${number(flow.step + 1)} من ${number(FLOW_STEPS.length)}">${FLOW_STEPS.map((t, i) => `<span class="${i < flow.step ? "done" : i === flow.step ? "now" : ""}"></span>`).join("")}</div>`;
+  const head = `<header class="flow-head"><button class="icon-button" data-flow-close aria-label="إغلاق">${icon("close")}</button><div class="flow-title"><strong>${esc(l.name)}</strong><small>${esc(label(l.service_id))} · ${esc(label(l.source_id))}</small></div>${tempBadge(l)}</header>${bar}<p class="flow-step-name"><span>خطوة ${number(flow.step + 1)} من ${number(FLOW_STEPS.length)}</span> ${FLOW_STEPS[flow.step]}</p>`;
+  let body = "";
+  if (flow.step === 0) {
+    body = `${contactLinks(l)}<p class="flow-context">${lc ? `آخر مرة: ${formatDate(lc.at)} · ${esc(OUTCOMES[lc.outcome] || "")}${lc.summary ? " — " + esc(lc.summary) : ""}` : firstReply ? "أول تواصل معاها. الرد السريع أهم حاجة." : "مفيش تواصل مسجّل قبل كده."}</p><section class="flow-card"><h3>ابدئي بالرد ده</h3>${flowReply(l, flow.state)}</section>${flowChecks(l, ["base"])}`;
+  } else if (flow.step === 1) {
+    body = `<section class="flow-card"><h3>اختاري اللي العميلة قالته</h3>${chips("state", flowStates(l), flow.state)}</section><section class="flow-card"><h3>الرد المناسب</h3>${flowReply(l, flow.state)}</section>${flowChecks(l, ["stage", "temp", "state"])}`;
+  } else {
+    const actions = Object.entries(ACTIONS).filter(
+      ([k]) => !(k === "first_reply" && firstReply && flow.outcome !== "no_answer") && k !== "attendance",
+    );
+    body = `<section class="flow-card"><h3>إيه اللي حصل؟</h3>${chips("outcome", Object.entries(OUTCOMES), flow.outcome)}</section>${
+      flow.outcome
+        ? `<section class="flow-card"><h3>الخطوة الجاية</h3>${chips("action", actions, flow.next)}</section><section class="flow-card"><h3>إمتى؟</h3>${chips("days", FLOW_DAYS, flow.days)}${flow.days === "custom" ? `<input class="flow-date" type="datetime-local" data-flow-custom value="${esc(flow.custom || localInput(Date.now() + 86400000))}">` : ""}</section><details class="flow-note" ${flow.note ? "open" : ""}><summary>إضافة ملاحظة (اختياري)</summary><textarea data-flow-note rows="3" maxlength="2000" placeholder="أي تفصيلة مهمة للمرة الجاية">${esc(flow.note)}</textarea></details><p class="flow-summary">${icon("check")} هيتسجل: ${esc(flowSummary(l))}${flowNextAt() ? " · " + esc(formatDate(cairoISO(flowNextAt()))) : ""}</p>`
+        : ""
+    }`;
+  }
+  const canSave = flow.outcome && flow.next && flowNextAt();
+  const foot = `<footer class="flow-foot">${flow.step > 0 ? `<button data-flow-back>رجوع</button>` : `<button data-flow-skip>اتخطّي للنتيجة</button>`}${flow.step < FLOW_STEPS.length - 1 ? `<button class="primary" data-flow-next>التالي ${icon("arrow")}</button>` : `<button class="primary" data-flow-save ${canSave ? "" : "disabled"}>حفظ والعميلة اللي بعدها</button>`}</footer>`;
+  return `<div class="flow">${head}<div class="flow-body">${body}</div>${foot}</div>`;
+}
+function setOutcome(l, o) {
+  flow.outcome = o;
+  const firstReply = !l.first_response_at;
+  if (o === "no_answer") flow.next = firstReply ? "first_reply" : "follow_up";
+  else if (firstReply) flow.next = "discovery";
+  else if (o === "interested" && tempOf(l).temp === "hot") flow.next = "offer_booking";
+  else if (o === "information") flow.next = "follow_up";
+  else flow.next = l.next_action && l.next_action !== "first_reply" ? l.next_action : "follow_up";
+  flow.days = o === "no_answer" && firstReply ? "2h" : OUTCOME_DEFAULTS[o];
+  const endItem = "end_next";
+  flow.done[endItem] = true;
+}
+async function saveFlow() {
+  const l = data.leads.find((x) => x.id === flow.lid);
+  if (!l || mutation) return;
+  const nextAt = flowNextAt();
+  if (!flow.outcome || !flow.next || !nextAt) return;
+  const firstReply = !l.first_response_at && flow.outcome !== "no_answer";
+  const body = [flowSummary(l), flow.note.trim()].filter(Boolean).join(" — ");
+  const btn = document.querySelector("[data-flow-save]");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "جاري الحفظ…";
+  }
+  mutation = true;
+  try {
+    await rpc("record_contact", {
+      lid: l.id,
+      expected: l.revision,
+      p: {
+        outcome: flow.outcome,
+        body,
+        next_action: flow.next,
+        next_at: cairoISO(nextAt),
+        contact_at: cairoISO(localInput()),
+        first_reply: firstReply,
+        is_follow_up: !!contacts.get(l.id),
+      },
+    });
+    try {
+      await rpc("record_checklist", {
+        lid: l.id,
+        p: { key: flow.key, done: flow.done },
+      });
+    } catch {}
+    flow = null;
+    mutation = false;
+    await refresh();
+    go("today");
+    toast("اتسجل ✓ ودي العميلة اللي بعدها");
+  } catch (e) {
+    mutation = false;
+    toast(arabicError(e), true);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "حفظ والعميلة اللي بعدها";
+    }
+  }
+}
+function bindFlow() {
+  document.querySelectorAll("[data-flow-start]").forEach(
+    (b) => (b.onclick = () => startFlow(b.dataset.flowStart)),
+  );
+  if (!flow) return;
+  const l = data.leads.find((x) => x.id === flow.lid);
+  if (!l) return;
+  const repaint = (top = false) => {
+    render();
+    if (top) window.scrollTo(0, 0);
+  };
+  const on = (sel, fn) =>
+    document.querySelectorAll(sel).forEach((b) => (b.onclick = () => fn(b)));
+  on("[data-flow-close]", () => {
+    flow = null;
+    go("today");
+  });
+  on("[data-flow-next]", () => {
+    flow.step = Math.min(flow.step + 1, FLOW_STEPS.length - 1);
+    repaint(true);
+  });
+  on("[data-flow-back]", () => {
+    flow.step = Math.max(flow.step - 1, 0);
+    repaint(true);
+  });
+  on("[data-flow-skip]", () => {
+    flow.step = FLOW_STEPS.length - 1;
+    repaint(true);
+  });
+  on("[data-flow-tick]", (b) => {
+    const k = b.dataset.flowTick;
+    flow.done[k] = !flow.done[k];
+    repaint();
+  });
+  on("[data-flow-state]", (b) => {
+    flow.state = b.dataset.flowState;
+    replyChoice[l.id] = flow.state;
+    repaint();
+  });
+  on("[data-flow-outcome]", (b) => {
+    setOutcome(l, b.dataset.flowOutcome);
+    repaint();
+  });
+  on("[data-flow-action]", (b) => {
+    flow.next = b.dataset.flowAction;
+    repaint();
+  });
+  on("[data-flow-days]", (b) => {
+    flow.days = b.dataset.flowDays;
+    repaint();
+  });
+  on("[data-flow-save]", () => saveFlow());
+  const c = document.querySelector("[data-flow-custom]");
+  if (c)
+    c.onchange = () => {
+      flow.custom = c.value;
+      repaint();
+    };
+  const n = document.querySelector("[data-flow-note]");
+  if (n) n.oninput = () => (flow.note = n.value);
+}
 function go(target) {
   page = target;
+  flow = null;
   selected = null;
   pageIndex = 0;
   search = "";
@@ -1396,6 +1656,7 @@ function go(target) {
 }
 let checkTimer;
 function bind() {
+  bindFlow();
   document.querySelectorAll("details[data-fold]").forEach((d) =>
     d.addEventListener("toggle", () => {
       d.open ? folds.add(d.dataset.fold) : folds.delete(d.dataset.fold);
@@ -1574,6 +1835,7 @@ function bind() {
               addModal();
               break;
             case "back":
+              flow = null;
               selected = null;
               render();
               break;
