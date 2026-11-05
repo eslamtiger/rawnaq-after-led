@@ -214,7 +214,7 @@ const tempBadge = (l) => {
   if (t.state === "previsit")
     return '<span class="temp previsit">قبل الزيارة</span>';
   if (!t.temp) return "";
-  return `<span class="temp ${t.temp}">${GRADES[t.temp]}${t.mode === "manual" ? " · يدوي" : ""}</span>`;
+  return `<span class="temp ${t.temp}">${GRADES[t.temp]}</span>`;
 };
 const field = (name, title, html, wide = false) =>
   `<label class="field ${wide ? "wide" : ""}" for="${name}"><span>${title}</span>${html}</label>`;
@@ -377,6 +377,25 @@ function reasonOf(l) {
     ? `${what}: متأخرة`
     : `${what} ${l.next_at ? formatDate(l.next_at) : ""}`;
 }
+function whenLabel(v, now = Date.now(), waiting = false) {
+  if (!v) return "";
+  const t = Date.parse(v),
+    d = t - now,
+    mins = Math.round(Math.abs(d) / 60000);
+  if (d < 0 || waiting) {
+    const ago =
+      mins < 60
+        ? `${number(Math.max(mins, 1))} د`
+        : mins < 1440
+          ? `${number(Math.round(mins / 60))} س`
+          : `${number(Math.round(mins / 1440))} يوم`;
+    return waiting ? `مستنية ${ago}` : `متأخرة ${ago}`;
+  }
+  const time = new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", hour: "numeric", minute: "2-digit" }).format(new Date(t));
+  if (cairoDay(t) === cairoDay(now)) return time;
+  if (cairoDay(t) === cairoDay(now + 86400000)) return "بكرة " + time;
+  return new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", weekday: "long" }).format(new Date(t));
+}
 function today() {
   const now = Date.now(),
     m = metrics(data.leads, data.appointments, now),
@@ -387,8 +406,25 @@ function today() {
   const hero = first
     ? `<section class="next-card ${priority(first, now) <= 1 ? "is-late" : ""}" aria-label="الخطوة الجاية"><span class="next-kicker">${priority(first, now) <= 1 ? "ابدئي بيها دلوقتي" : "الخطوة الجاية"}</span><h2>${esc(first.name)}</h2><p class="next-why">${esc(reasonOf(first))}</p><p class="next-meta">${esc(label(first.service_id))} · ${esc(label(first.source_id))}</p><button class="primary big" data-flow-start="${first.id}">ابدئي التواصل</button><button class="text-button" data-open="${first.id}">الملف كامل</button></section>`
     : `<section class="next-card calm"><h2>مفيش متابعات مستنياكي</h2><p class="next-why">كل المتابعات في وقتها. لو وصلك استفسار جديد، سجّليه من الزر الوردي.</p></section>`;
-  const list = others.length
-    ? `<section class="then"><h3>بعدها <span>${number(Math.max(q.length - 1, 0))}</span></h3>${others.map((l) => `<button class="then-row" data-flow-start="${l.id}"><span class="then-main"><strong>${esc(l.name)}</strong><small>${esc(reasonOf(l))}</small></span>${tempBadge(l)}${icon("arrow")}</button>`).join("")}${q.length > 8 ? `<button class="text-button panel-link" data-page="followups">كل المتابعات (${number(q.length)}) ${icon("arrow")}</button>` : ""}</section>`
+  const rest = q.slice(1);
+  const todayKey = cairoDay(now);
+  const groups = [
+    ["late", "متأخر", rest.filter((l) => !l.first_response_at || (l.next_at && Date.parse(l.next_at) < now))],
+    ["today", "باقي النهارده", rest.filter((l) => l.first_response_at && l.next_at && Date.parse(l.next_at) >= now && cairoDay(l.next_at) === todayKey)],
+    ["later", "الأيام الجاية", rest.filter((l) => l.first_response_at && l.next_at && Date.parse(l.next_at) >= now && cairoDay(l.next_at) !== todayKey)],
+  ].filter((g) => g[2].length);
+  const row = (l) => {
+    const t = tempOf(l);
+    const late = !l.first_response_at || (l.next_at && Date.parse(l.next_at) < now);
+    return `<button class="q-row" data-flow-start="${l.id}"><span class="q-dot ${t.state === "previsit" ? "previsit" : t.temp || "none"}" aria-hidden="true"></span><span class="q-main"><strong>${esc(l.name)}</strong><small>${!l.first_response_at ? "أول رد" : esc(ACTIONS[l.next_action] || "متابعة")}${t.temp ? " · " + GRADES[t.temp] : t.state === "previsit" ? " · قبل الزيارة" : ""}</small></span><span class="q-when ${late ? "late" : ""}">${whenLabel(!l.first_response_at ? l.received_at : l.next_at, now, !l.first_response_at)}</span></button>`;
+  };
+  const list = groups.length
+    ? groups
+        .map(
+          ([k, title, ls]) =>
+            `<section class="q-group ${k}"><h3>${title} <span>${number(ls.length)}</span></h3>${ls.slice(0, 6).map(row).join("")}${ls.length > 6 ? `<button class="text-button panel-link" data-page="followups">كمان ${number(ls.length - 6)}</button>` : ""}</section>`,
+        )
+        .join("")
     : "";
   const board =
     todayView === "kanban"
@@ -1521,12 +1557,15 @@ function startFlow(id) {
   render();
   window.scrollTo(0, 0);
 }
+function waDigits(l) {
+  let d = String(l.contact || "").replace(/[\s-]/g, "").replace(/^\+/, "");
+  if (/^01[0125]\d{8}$/.test(d)) d = "2" + d;
+  return /^\d{7,15}$/.test(d) ? d : "";
+}
 function contactLinks(l) {
-  const raw = String(l.contact || "").replace(/[\s-]/g, "");
-  let digits = raw.replace(/^\+/, "");
-  if (/^01[0125]\d{8}$/.test(digits)) digits = "2" + digits;
-  if (!/^\d{7,15}$/.test(digits)) return "";
-  return `<div class="flow-contact"><a class="contact-btn" href="tel:+${digits}">${icon("phone")} اتصال</a><a class="contact-btn wa" href="https://wa.me/${digits}" target="_blank" rel="noopener">${icon("chat")} واتساب</a></div>`;
+  const d = waDigits(l);
+  if (!d) return "";
+  return `<div class="head-actions"><a class="round-btn" href="tel:+${d}" aria-label="اتصال">${icon("phone")}</a><a class="round-btn wa" href="https://wa.me/${d}" target="_blank" rel="noopener" aria-label="فتح واتساب">${icon("chat")}</a></div>`;
 }
 function flowChecks(l, layers) {
   const items = buildChecklist(l, tempOf(l), {
@@ -1565,11 +1604,17 @@ function flowReply(l, state) {
       temp: t.temp,
       objectionId: state === "s6" ? l.objection_id : null,
     }),
-    vars = replyVars(l);
-  const [best, ...others] = replies;
-  if (!best)
-    return `<p class="flow-empty">مفيش رد جاهز للحالة دي لسه. اكتبي ردك بنفسك.</p>`;
-  return `${replyCard(best, vars)}${others.length ? `<details class="more-replies"><summary>ردود تانية (${number(others.length)})</summary>${others.map((r) => replyCard(r, vars)).join("")}</details>` : ""}`;
+    vars = replyVars(l),
+    canSend = !!waDigits(l);
+  if (!replies.length)
+    return `<p class="flow-empty">مفيش رد جاهز للحالة دي. اكتبي ردك بنفسك.</p>`;
+  const cards = replies
+    .map((r, i) => {
+      const f = fillTemplate(r.body, vars);
+      return `<article class="bubble-card" data-bubble="${i}"><div class="bubble-meta"><span>${esc(r.label.replace(/^[^—]*—\s*/, "") || r.label)}</span>${r.approved ? "" : '<em>مسودة</em>'}</div><textarea class="bubble" rows="4" dir="auto" aria-label="نص الرد">${esc(f.text)}</textarea>${f.missing.length ? `<p class="bubble-gap">كمّلي قبل الإرسال: ${f.missing.map((m) => esc(m.replaceAll("_", " "))).join("، ")}</p>` : ""}${training && r.why ? `<p class="reply-why"><b>ليه الرد ده؟</b> ${esc(r.why)}</p>` : ""}<div class="bubble-actions">${canSend ? `<button class="send-wa" data-bubble-send>${icon("chat")} ابعتي على واتساب</button>` : ""}<button class="copy-btn" data-bubble-copy>${icon("copy")} نسخ</button></div></article>`;
+    })
+    .join("");
+  return `<div class="bubbles" ${replies.length > 1 ? 'data-swipe' : ""}>${cards}</div>${replies.length > 1 ? `<p class="bubble-count">${number(replies.length)} ردود · اسحبي للجنب عشان تشوفي الباقي</p>` : ""}`;
 }
 function flowNextAt() {
   if (flow.days === "custom") return flow.custom;
@@ -1594,10 +1639,10 @@ function flowView() {
   const firstReply = !l.first_response_at;
   const lc = contacts.get(l.id);
   const bar = `<div class="flow-progress" aria-label="خطوة ${number(flow.step + 1)} من ${number(FLOW_STEPS.length)}">${FLOW_STEPS.map((t, i) => `<span class="${i < flow.step ? "done" : i === flow.step ? "now" : ""}"></span>`).join("")}</div>`;
-  const head = `<header class="flow-head"><button class="icon-button" data-flow-close aria-label="إغلاق">${icon("close")}</button><div class="flow-title"><strong>${esc(l.name)}</strong><small>${esc(label(l.service_id))} · ${esc(label(l.source_id))}</small></div>${tempBadge(l)}</header>${bar}<p class="flow-step-name"><span>خطوة ${number(flow.step + 1)} من ${number(FLOW_STEPS.length)}</span> ${FLOW_STEPS[flow.step]}</p>`;
+  const head = `<header class="flow-head"><button class="icon-button" data-flow-close aria-label="إغلاق">${icon("close")}</button><div class="flow-title"><strong>${esc(l.name)}</strong><small>${esc(label(l.service_id))} · ${esc(label(l.source_id))}</small></div>${contactLinks(l)}</header>${bar}<p class="flow-step-name">${FLOW_STEPS[flow.step]} <span>${number(flow.step + 1)} من ${number(FLOW_STEPS.length)}</span></p>`;
   let body = "";
   if (flow.step === 0) {
-    body = `${contactLinks(l)}${l.need || l.objection_id ? `<p class="flow-context need">${l.need ? `<b>الاحتياج:</b> ${esc(l.need)}` : ""}${l.need && l.objection_id ? "<br>" : ""}${l.objection_id ? `<b>الاعتراض:</b> ${esc(label(l.objection_id))}` : ""}</p>` : ""}<p class="flow-context">${lc ? `آخر مرة: ${formatDate(lc.at)} · ${esc(OUTCOMES[lc.outcome] || "")}${lc.summary ? " — " + esc(lc.summary) : ""}` : firstReply ? "أول تواصل معاها. الرد السريع أهم حاجة." : "مفيش تواصل مسجّل قبل كده."}</p><section class="flow-card"><h3>ابدئي بالرد ده</h3>${flowReply(l, flow.state)}</section>${flowChecks(l, ["base"])}`;
+    body = `${l.need || l.objection_id ? `<p class="flow-context need">${l.need ? `<b>الاحتياج:</b> ${esc(l.need)}` : ""}${l.need && l.objection_id ? "<br>" : ""}${l.objection_id ? `<b>الاعتراض:</b> ${esc(label(l.objection_id))}` : ""}</p>` : ""}<p class="flow-context">${lc ? `آخر مرة: ${formatDate(lc.at)} · ${esc(OUTCOMES[lc.outcome] || "")}${lc.summary ? " — " + esc(lc.summary) : ""}` : firstReply ? "أول تواصل معاها. الرد السريع أهم حاجة." : "مفيش تواصل مسجّل قبل كده."}</p><section class="flow-card"><h3>ابدئي بالرد ده</h3>${flowReply(l, flow.state)}</section>${flowChecks(l, ["base"])}`;
   } else if (flow.step === 1) {
     body = `<section class="flow-card"><h3>اختاري اللي العميلة قالته</h3>${chips("state", flowStates(l), flow.state)}</section><section class="flow-card"><h3>الرد المناسب</h3>${flowReply(l, flow.state)}</section>${flowChecks(l, ["stage", "temp", "state"])}`;
   } else {
@@ -1725,6 +1770,26 @@ function bindFlow() {
     repaint();
   });
   on("[data-flow-save]", () => saveFlow());
+  const textOf = (b) => b.closest(".bubble-card").querySelector("textarea").value.trim();
+  on("[data-bubble-copy]", async (b) => {
+    try {
+      await navigator.clipboard.writeText(textOf(b));
+      toast("اتنسخ الرد");
+    } catch {
+      toast("مقدرتش أنسخ. علّمي على النص وانسخيه", true);
+    }
+  });
+  on("[data-bubble-send]", (b) => {
+    const text = textOf(b);
+    if (/\{[^}]+\}/.test(text)) {
+      toast("كمّلي الخانات اللي بين القوسين الأول", true);
+      b.closest(".bubble-card").querySelector("textarea").focus();
+      return;
+    }
+    window.open(`https://wa.me/${waDigits(l)}?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+    flow.done.base_greeting = true;
+    toast("اتفتح واتساب بالرد. بعد ما تبعتي كمّلي هنا");
+  });
   const c = document.querySelector("[data-flow-custom]");
   if (c)
     c.onchange = () => {
