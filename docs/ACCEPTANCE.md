@@ -20,3 +20,14 @@ Preview verification and exact commit are recorded separately after deployment. 
 Tested (local, dependency-free): `node --check src/*.js`; `node --test tests/assistant.test.js tests/domain.test.js` — temperature rules, manual override, last contact, journey stage, reply picking, template filling, checklist generation/keys/progress, brief. New SQL (migration) run on a throwaway PostgreSQL 16 with an auth shim (not real Supabase).
 
 NOT tested: `npm ci`/`npm run build`/full `npm test` (npm registry blocked in the build environment); DOM/pglite tests; migration and seed on the real Supabase project; 375px visual check and the 20-second add-lead target on a real phone; live staff login; public intake (not implemented). Do not report these as passed.
+
+## V0.4–0.9 (2026-11-05)
+**اتجرّب فعلًا**
+- `npm run check` ✓ · اختبارات domain/assistant: 35 ✓ (منها 4 جديدة: السعر، الفترة بتوقيت القاهرة، رحلة العميلات، إحصاء الخدمات).
+- نسخة محلية بعرض 375px ببيانات وهمية: اليوم ← وضع التواصل ← الحفظ ← العميلة التالية؛ إضافة عميلة ← فتح وضع التواصل؛ لوحة الإدارة؛ الخدمات والأسعار. لا تمرير أفقي ولا أخطاء كونسول.
+- **على الموقع الحقيقي** (متصفح التطبيق، 375px): شاشة اختيار الاسم، الدخول كمديرة، لوحة الإدارة بالأرقام الحقيقية، حفظ خدمة (RPC الجديد يعمل ويحافظ على الـmeta القديمة)، رحلة تواصل كاملة على «ندى مصطفى» اتسجلت (تواصل + قائمة) ورجعت لـ«ريم».
+- بناء Vercel production ✓.
+
+**ما اتجرّبش**
+- `tests/interface.test.js` و`tests/*database*.test.js` (مكتبات happy-dom/pglite غير متاحة محليًا)؛ اختبار الواجهة اتعدّل ليناسب التدفق الجديد بدون تشغيل.
+- قياس الـ20 ثانية على موبايل حقيقي بيد موظفة.

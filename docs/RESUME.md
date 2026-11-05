@@ -25,3 +25,18 @@ Needs the user to apply: migration `20261105000001_reply_assistant_meta_and_chec
 
 NOT done: public intake endpoint (waiting for architecture choice: Vercel Function vs Supabase Edge Function; security design to be shown first).
 Pre-launch (unchanged, outside this work): first admin account, close public/anonymous sign-up, link Vercel to GitHub or custom domain, live login test. The intake default owner needs the first admin account.
+
+## V0.4–0.9 (2026-11-05) — تجربة الموظف كتطبيق + لوحة الإدارة + الأسعار
+
+### اللي اتعمل
+- **وضع التواصل (3 خطوات):** ابدئي (اتصال/واتساب + رد افتتاحي + بنود البداية) ← العميلة قالت إيه؟ (اختيارات تغيّر الرد فورًا) ← النتيجة (اختيارات + موعد بضغطة + ملخص تلقائي). الحفظ يرجع لـ«اليوم» على العميلة التالية. نفس RPCs (`record_contact` ثم `record_checklist`).
+- **إضافة عميلة:** المصدر والخدمة اختيارات (chips) بدل قوائم، وبعد الحفظ يفتح وضع التواصل على العميلة الجديدة.
+- **شريط سفلي كالتطبيقات:** اليوم / العميلات / + جديدة (في المنتصف) / المتابعات / المزيد.
+- **لوحة الإدارة من جديد:** فترة (النهارده/7/30/الشهر/الكل)، محتاج انتباه دلوقتي، رحلة العميلات مع أكبر نقطة خسارة، الخدمات (استفسار/حجز/حضور/قيمة الحضور بالسعر المسجّل/حجوزات جاية)، المصادر، الفريق، أسباب الخسارة.
+- **الخدمات والأسعار (إدارة فقط):** `configuration.meta.price` و`price_note`. ترحيل `20261105060000_service_prices.sql` (مطبّق على Supabase): `save_configuration` يقبل مفاتيح السعر للخدمات فقط ويدمجها مع الـmeta القديمة. لا أسعار مختلقة؛ الأسعار تدخلها الإدارة/الكاشير.
+- **وضع العرض التجريبي:** اختيار اسم بدون كلمة سر (سارة/أحمد/منى/كريم/مديرة المركز=أدمن) عبر `join_qa_workspace(p_person)` (ترحيل `20261105040000_qa_persona_picker.sql`، مطبّق). يقفل تلقائيًا مع `setting_qa_open_access` (أقصى 49 ساعة). حماية Vercel مقفولة والمشروع منشور على production مع `VITE_QA_ANONYMOUS=true`.
+- **بيانات عرض:** 16 عميلة تجريبية بأسماء مصرية وأرقام وهمية (+2010000001xx)، والبيانات القديمة اتأرشفت (lost/lost_other) لأن الحذف احتاج موافقة لم تصل.
+
+### قبل الإطلاق الفعلي (لازم)
+- إلغاء `VITE_QA_ANONYMOUS` من production، وقفل `setting_qa_open_access`، وإزالة دالة `join_qa_workspace()` القديمة بدون معاملات.
+- مسح البيانات التجريبية والمؤرشفة، وإنشاء حسابات حقيقية + أول أدمن، وإعادة حماية/تسجيل الدخول.
