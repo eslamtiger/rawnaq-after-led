@@ -120,7 +120,7 @@ test("Arabic interface: navigation, empty data, profile and validated save forms
     el.click();
   };
   click('[data-page="dashboard"]');
-  assert.ok(w.document.body.textContent.includes("لوحة المتابعة"));
+  assert.ok(w.document.body.textContent.includes("رحلة العميلات"));
   assert.ok(w.document.body.textContent.includes("—"));
   click('[data-page="leads"]');
   click('[data-act="add"]');

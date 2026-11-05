@@ -378,3 +378,113 @@ export function effectiveTemperature(lead, ctx = {}, now = Date.now()) {
     reasons: computed.reasons,
   };
 }
+
+// ---- Services, prices and the management dashboard (pure, testable) ----
+// A service price lives in configuration.meta.price (EGP). Missing = not set.
+export function servicePrice(row) {
+  const v = row?.meta?.price;
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null;
+}
+export const money = (v) =>
+  v === null || v === undefined
+    ? "—"
+    : new Intl.NumberFormat("ar-EG", { maximumFractionDigits: 0 }).format(v) +
+      " ج.م";
+export const PERIODS = {
+  today: "النهارده",
+  d7: "آخر ٧ أيام",
+  d30: "آخر ٣٠ يوم",
+  month: "الشهر ده",
+  all: "الكل",
+};
+// [from, to) as epoch ms for a period, using Cairo calendar days.
+export function periodRange(key, now = Date.now()) {
+  const today = cairoDay(now);
+  const startOf = (day) => Date.parse(cairoISO(day + "T00:00"));
+  const end = now + 1;
+  if (key === "today") return [startOf(today), end];
+  if (key === "d7" || key === "d30") {
+    const n = key === "d7" ? 6 : 29;
+    return [startOf(cairoDay(now - n * 86400000)), end];
+  }
+  if (key === "month") return [startOf(today.slice(0, 8) + "01"), end];
+  return [-Infinity, Infinity];
+}
+const inRange = (v, [a, b]) => {
+  const t = Date.parse(v);
+  return Number.isFinite(t) && t >= a && t < b;
+};
+// The lead journey for a period: leads by received_at; each step counts
+// unique leads that ever reached it.
+export function journey(leads, appointments, range) {
+  const ls = leads.filter((l) => inRange(l.received_at, range));
+  const ids = new Set(ls.map((l) => l.id));
+  const attended = new Set(
+    appointments
+      .filter((a) => ids.has(a.lead_id) && a.status === "attended")
+      .map((a) => a.lead_id),
+  );
+  const steps = [
+    ["inquiries", "استفسارات", ls.length],
+    ["replied", "اتردّ عليهم", ls.filter((l) => l.first_response_at).length],
+    ["offered", "اتعرض عليهم حجز", ls.filter((l) => l.booking_offered_at || l.first_booked_at).length],
+    ["booked", "حجزوا", ls.filter((l) => l.first_booked_at).length],
+    ["attended", "حضروا", attended.size],
+  ];
+  let worst = null;
+  steps.forEach((s, i) => {
+    if (!i || !steps[i - 1][2]) return;
+    const drop = 1 - s[2] / steps[i - 1][2];
+    if (drop > 0 && (!worst || drop > worst.drop)) worst = { key: s[0], drop };
+  });
+  return { steps, worst, leads: ls };
+}
+// Per-service numbers. Revenue = attended appointments in range × listed
+// price; upcoming = scheduled/confirmed appointments after now × price.
+// These are estimates from the listed price, not cashier receipts.
+export function serviceStats(leads, appointments, services, range, now = Date.now()) {
+  const byId = new Map(leads.map((l) => [l.id, l]));
+  const rows = services.map((s) => ({
+    id: s.id,
+    label: s.label,
+    price: servicePrice(s),
+    inquiries: 0,
+    booked: 0,
+    attended: 0,
+    upcoming: 0,
+  }));
+  const idx = new Map(rows.map((r) => [r.id, r]));
+  for (const l of leads) {
+    const r = idx.get(l.service_id);
+    if (!r) continue;
+    if (inRange(l.received_at, range)) {
+      r.inquiries++;
+      if (l.first_booked_at) r.booked++;
+    }
+  }
+  for (const a of appointments) {
+    const l = byId.get(a.lead_id);
+    const r = l && idx.get(l.service_id);
+    if (!r) continue;
+    if (a.status === "attended" && inRange(a.starts_at, range)) r.attended++;
+    if (["scheduled", "confirmed"].includes(a.status) && Date.parse(a.starts_at) > now)
+      r.upcoming++;
+  }
+  for (const r of rows) {
+    r.revenue = r.price === null ? null : r.attended * r.price;
+    r.pipeline = r.price === null ? null : r.upcoming * r.price;
+  }
+  const sum = (k) =>
+    rows.reduce((t, r) => t + (r[k] === null ? 0 : r[k]), 0);
+  return {
+    rows,
+    total: {
+      inquiries: sum("inquiries"),
+      booked: sum("booked"),
+      attended: sum("attended"),
+      revenue: sum("revenue"),
+      pipeline: sum("pipeline"),
+      missingPrices: rows.filter((r) => r.price === null && (r.attended || r.upcoming || r.inquiries)).length,
+    },
+  };
+}

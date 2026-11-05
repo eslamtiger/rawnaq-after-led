@@ -169,3 +169,59 @@ test("V02 independent concepts, timestamp queues and appointment buckets", () =>
   assert.equal(m.booked, 1);
   assert.equal(m.noShow, 1);
 });
+
+import { servicePrice, periodRange, journey, serviceStats } from "../src/domain.js";
+
+test("servicePrice reads only valid numbers", () => {
+  assert.equal(servicePrice({ meta: { price: 1500 } }), 1500);
+  assert.equal(servicePrice({ meta: { price: "1500" } }), null);
+  assert.equal(servicePrice({ meta: {} }), null);
+  assert.equal(servicePrice({ meta: { price: -1 } }), null);
+});
+
+test("periodRange uses Cairo calendar days", () => {
+  const now = Date.parse("2026-11-05T03:30:00Z"); // 05:30 Cairo
+  const [a] = periodRange("today", now);
+  assert.equal(new Date(a).toISOString(), "2026-11-04T22:00:00.000Z");
+  const [m] = periodRange("month", now);
+  assert.equal(new Date(m).toISOString(), "2026-10-31T22:00:00.000Z");
+  assert.deepEqual(periodRange("all", now), [-Infinity, Infinity]);
+});
+
+test("journey counts unique leads per step and finds the biggest drop", () => {
+  const leads = [
+    { id: "a", received_at: "2026-11-04T10:00:00Z", first_response_at: "2026-11-04T10:05:00Z", booking_offered_at: "2026-11-04T11:00:00Z", first_booked_at: "2026-11-04T12:00:00Z" },
+    { id: "b", received_at: "2026-11-04T10:00:00Z", first_response_at: "2026-11-04T10:05:00Z" },
+    { id: "c", received_at: "2026-11-04T10:00:00Z" },
+    { id: "d", received_at: "2026-11-04T10:00:00Z" },
+  ];
+  const appts = [{ lead_id: "a", status: "attended", starts_at: "2026-11-05T10:00:00Z" }];
+  const j = journey(leads, appts, [-Infinity, Infinity]);
+  assert.deepEqual(j.steps.map((s) => s[2]), [4, 2, 1, 1, 1]);
+  assert.equal(j.worst.key, "replied");
+});
+
+test("serviceStats estimates revenue only where a price exists", () => {
+  const now = Date.parse("2026-11-05T00:00:00Z");
+  const services = [
+    { id: "s1", label: "أ", meta: { price: 1000 } },
+    { id: "s2", label: "ب", meta: {} },
+  ];
+  const leads = [
+    { id: "a", service_id: "s1", received_at: "2026-11-01T00:00:00Z", first_booked_at: "2026-11-02T00:00:00Z" },
+    { id: "b", service_id: "s1", received_at: "2026-11-01T00:00:00Z", first_booked_at: "2026-11-02T00:00:00Z" },
+    { id: "c", service_id: "s2", received_at: "2026-11-01T00:00:00Z", first_booked_at: "2026-11-02T00:00:00Z" },
+  ];
+  const appts = [
+    { lead_id: "a", status: "attended", starts_at: "2026-11-03T00:00:00Z" },
+    { lead_id: "b", status: "confirmed", starts_at: "2026-11-06T00:00:00Z" },
+    { lead_id: "c", status: "attended", starts_at: "2026-11-03T00:00:00Z" },
+  ];
+  const s = serviceStats(leads, appts, services, [-Infinity, Infinity], now);
+  const s1 = s.rows.find((r) => r.id === "s1"), s2 = s.rows.find((r) => r.id === "s2");
+  assert.equal(s1.revenue, 1000);
+  assert.equal(s1.pipeline, 1000);
+  assert.equal(s2.revenue, null);
+  assert.equal(s.total.revenue, 1000);
+  assert.equal(s.total.missingPrices, 1);
+});

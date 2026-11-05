@@ -34,6 +34,12 @@ import {
   safeCSV,
   effectiveTemperature,
   lastContactsByLead,
+  servicePrice,
+  money,
+  PERIODS,
+  periodRange,
+  journey,
+  serviceStats,
 } from "./domain.js";
 import {
   REPLY_STATES,
@@ -87,7 +93,8 @@ const nav = [
   ["leads", "العميلات المحتملات", "users"],
   ["followups", "المتابعات", "clock"],
   ["appointments", "الحجوزات", "calendar"],
-  ["dashboard", "لوحة المتابعة", "chart"],
+  ["dashboard", "لوحة الإدارة", "chart"],
+  ["services", "الخدمات والأسعار", "tag"],
   ["scripts", "دليل التواصل", "book"],
   ["qa", "الجودة والتدريب", "check"],
   ["settings", "الإعدادات", "settings"],
@@ -149,6 +156,7 @@ const icons = {
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
   chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+  tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
 };
 const icon = (n) =>
   `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[n] || icons.check}</svg>`;
@@ -307,7 +315,7 @@ async function refresh() {
 }
 function render() {
   indexData();
-  root.innerHTML = `<div class="workspace ${flow && flow.lid === selected ? "in-flow" : ""}"><aside class="sidebar"><a class="brand-logo" href="#today" aria-label="عيادات رونق — الرئيسية"><img src="/brand/rawnaq-logo.png" alt="عيادات رونق للجلدية والتجميل والليزر" width="140" height="208"></a><div class="sidebar-caption">متابعة العميلات</div><nav aria-label="التنقل الرئيسي">${nav.map(([id, title, i]) => `<button data-page="${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><span class="avatar">${esc(me.display_name.charAt(0))}</span><div><strong>${esc(me.display_name)}</strong><small>${me.role === "admin" ? "إدارة المركز" : "موظفة المبيعات"}</small></div><button class="icon-button" data-act="logout" aria-label="${qaAnonymous ? "تغيير الشخص" : "تسجيل الخروج"}">${icon("logout")}</button></div></aside><div class="main"><header class="topbar"><div class="breadcrumb">رونق <span>/</span> ${nav.find((n) => n[0] === page)?.[1] ?? "المزيد"}</div><div class="top-actions"><span class="connection"><i></i> متصل</span><button class="icon-button" data-act="refresh" aria-label="تحديث البيانات">${icon("refresh")}</button></div></header><main class="content">${selected ? (flow && flow.lid === selected ? flowView() : profileView()) : pageView()}</main><footer>توقيت القاهرة · ${session.user.is_anonymous ? "اختبار QA مؤقت — بيانات وهمية فقط · " : ""}البيانات حسب صلاحيات حسابك <span>رونق — متابعة باهتمام</span></footer></div>${!selected && ["today", "leads", "followups"].includes(page) ? `<button class="fab" data-act="add" aria-label="تسجيل عميلة جديدة">${icon("plus")}<span>عميلة جديدة</span></button>` : ""}<nav class="bottom-nav" aria-label="التنقل السفلي">${bottomNav.map(([id, title, i]) => id === "add" ? `<button class="nav-add" data-act="add" aria-label="تسجيل عميلة جديدة"><span class="nav-add-dot">${icon(i)}</span><span>${title}</span></button>` : `<button data-page="${id}" class="${!selected && (page === id || (id === "more" && ["appointments", "dashboard", "scripts", "qa", "settings"].includes(page))) ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" && queue(data.leads).length ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav></div><dialog id="modal" aria-labelledby="modal-title"></dialog>`;
+  root.innerHTML = `<div class="workspace ${flow && flow.lid === selected ? "in-flow" : ""}"><aside class="sidebar"><a class="brand-logo" href="#today" aria-label="عيادات رونق — الرئيسية"><img src="/brand/rawnaq-logo.png" alt="عيادات رونق للجلدية والتجميل والليزر" width="140" height="208"></a><div class="sidebar-caption">متابعة العميلات</div><nav aria-label="التنقل الرئيسي">${nav.map(([id, title, i]) => `<button data-page="${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><span class="avatar">${esc(me.display_name.charAt(0))}</span><div><strong>${esc(me.display_name)}</strong><small>${me.role === "admin" ? "إدارة المركز" : "موظفة المبيعات"}</small></div><button class="icon-button" data-act="logout" aria-label="${qaAnonymous ? "تغيير الشخص" : "تسجيل الخروج"}">${icon("logout")}</button></div></aside><div class="main"><header class="topbar"><div class="breadcrumb">رونق <span>/</span> ${nav.find((n) => n[0] === page)?.[1] ?? "المزيد"}</div><div class="top-actions"><span class="connection"><i></i> متصل</span><button class="icon-button" data-act="refresh" aria-label="تحديث البيانات">${icon("refresh")}</button></div></header><main class="content">${selected ? (flow && flow.lid === selected ? flowView() : profileView()) : pageView()}</main><footer>توقيت القاهرة · ${session.user.is_anonymous ? "اختبار QA مؤقت — بيانات وهمية فقط · " : ""}البيانات حسب صلاحيات حسابك <span>رونق — متابعة باهتمام</span></footer></div>${!selected && ["today", "leads", "followups"].includes(page) ? `<button class="fab" data-act="add" aria-label="تسجيل عميلة جديدة">${icon("plus")}<span>عميلة جديدة</span></button>` : ""}<nav class="bottom-nav" aria-label="التنقل السفلي">${bottomNav.map(([id, title, i]) => id === "add" ? `<button class="nav-add" data-act="add" aria-label="تسجيل عميلة جديدة"><span class="nav-add-dot">${icon(i)}</span><span>${title}</span></button>` : `<button data-page="${id}" class="${!selected && (page === id || (id === "more" && ["appointments", "dashboard", "services", "scripts", "qa", "settings"].includes(page))) ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" && queue(data.leads).length ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav></div><dialog id="modal" aria-labelledby="modal-title"></dialog>`;
   bind();
 }
 function heading(k, title, sub, action = "") {
@@ -323,6 +331,7 @@ function pageView() {
   if (page === "leads" || page === "followups") return leadList();
   if (page === "appointments") return appointmentsView();
   if (page === "dashboard") return dashboard();
+  if (page === "services") return servicesPage();
   if (page === "scripts") return scripts();
   if (page === "qa") return quality();
   if (page === "more") return morePage();
@@ -332,7 +341,8 @@ function morePage() {
   const items = [
     ["followups", "المتابعات", "كل المتابعات: متأخر واليوم والقادم", "clock"],
     ["appointments", "الحجوزات", "المواعيد القادمة وتسجيل الحضور", "calendar"],
-    ["dashboard", "لوحة المتابعة", "أرقام الأداء والقمع", "chart"],
+    ["dashboard", "لوحة الإدارة", "الخدمات والإيراد ورحلة العميلات", "chart"],
+    ...(me.role === "admin" ? [["services", "الخدمات والأسعار", "سعر كل خدمة للوحة الإدارة", "tag"]] : []),
     ["scripts", "دليل التواصل", "القوالب والردود على الاعتراضات", "book"],
     ["qa", "الجودة والتدريب", "مراجعات التواصل ومعايير الجودة", "check"],
     ["settings", "الإعدادات", "المصادر والقوالب وفريق العمل", "settings"],
@@ -592,52 +602,137 @@ function appointmentsView() {
         )
   }</section>`;
 }
+let dashPeriod = "d30";
+function bars(rows, max) {
+  return rows
+    .map(
+      (r) =>
+        `<li class="bar-row"><div class="bar-top"><span>${esc(r.label)}</span><strong>${r.value}</strong></div><i class="bar" style="width:${max ? Math.max(3, Math.round((r.n / max) * 100)) : 0}%"></i>${r.sub ? `<small>${r.sub}</small>` : ""}</li>`,
+    )
+    .join("");
+}
 function dashboard() {
-  const leads = filtered(),
-    m = metrics(leads, data.appointments),
-    stages = [
-      ["الاستفسارات", m.total],
-      ["تم الرد", m.replied],
-      ["تم التأهيل", m.qualified],
-      ["تم عرض الحجز", m.offered],
-      ["تم الحجز مرة على الأقل", m.booked],
-    ];
-  return `${heading("قرارات مبنية على بيانات", "لوحة المتابعة", "المؤشرات مرتبطة بتاريخ وصول الاستفسار، وبتشمل المراحل المسجلة تاريخيًا.", `<button data-act="export">تصدير التقرير</button><button data-act="backup">نسخة كاملة JSON</button>`)}${filters(true)}<section class="stats dashboard-stats">${stat("العميلات النشطات", number(m.active), "عميلات غير مغلقات")}${stat("عُرض الحجز", number(m.offered), "عميلات فريدات")}${stat("حجزن", number(m.booked), "عميلات حجزن مرة على الأقل")}${stat("حضرن", number(m.attended), "عميلات فريدات")}${stat("الحضور من الحجز", percent(m.attended, m.booked), "عميلات حضرن ÷ عميلات حجزن")}${stat("لم يحضرن", number(m.noShow), "عميلات لديهن غياب تاريخي، يشمل من أعدن الحجز")}${stat("مفقودات", number(m.lost))}${stat("متابعات اليوم", number(m.today), "متبقي اليوم؛ المتأخر منفصل")}${stat("متابعات متأخرة", number(m.overdue))}${stat("إجمالي العميلات", number(m.total), "داخل النطاق المختار")}${stat("نسبة الرد", percent(m.replied, m.total), `${number(m.replied)} تم الرد عليهن`)}${stat("متوسط أول رد", m.response === null ? "—" : number(m.response) + " د", "زمن فعلي، يشمل خارج ساعات العمل")}${stat("التحويل إلى حجز", percent(m.booked, m.total), `${number(m.booked)} عميلة حجزت`, "highlight")}${stat("مواعيد بدون نتيجة", number(m.unrecorded), "مواعيد مرّ وقتها ولم يُسجل حضورها")}</section><div class="analytics-grid"><section class="panel"><div class="panel-head"><h2>مسار التحويل</h2></div><div class="funnel">${stages.map(([s, n], i) => `<div class="funnel-item"><div><span>${s}</span><strong>${number(n)}</strong></div><progress max="${m.total || 1}" value="${n}" aria-label="${s}"></progress><small>${percent(n, m.total)} من الإجمالي${i > 0 ? " · " + percent(n, stages[i - 1][1]) + " من السابقة" : ""}</small></div>`).join("")}</div></section><section class="panel"><div class="panel-head"><h2>أسباب الفقد</h2></div>${configs(
-    "lost_reason",
-  )
-    .map((c) => {
-      const n = leads.filter(
-        (l) => l.stage === "lost" && l.lost_reason_id === c.id,
-      ).length;
-      return `<div class="reason"><span>${esc(c.label)}</span><strong>${number(n)}</strong></div>`;
+  const now = Date.now(),
+    range = periodRange(dashPeriod, now),
+    j = journey(data.leads, data.appointments, range),
+    ls = j.leads,
+    period = metrics(ls, data.appointments, now),
+    current = metrics(data.leads, data.appointments, now),
+    svc = serviceStats(data.leads, data.appointments, configs("service"), range, now),
+    admin = me.role === "admin";
+  const chipsHtml = `<div class="chip-grid period" role="group" aria-label="الفترة">${Object.entries(PERIODS).map(([k, v]) => `<button type="button" class="chip ${k === dashPeriod ? "on" : ""}" data-dash-period="${k}" aria-pressed="${k === dashPeriod}">${v}</button>`).join("")}</div>`;
+  const tile = (n, label, target, tone = "") =>
+    `<button class="att-tile ${tone}" ${target ? `data-page="${target}"` : "disabled"}><strong>${n}</strong><span>${label}</span></button>`;
+  const attention = `<section class="dash-block"><h2>محتاج انتباه دلوقتي</h2><div class="att-grid">${tile(number(current.unanswered), "استفسار من غير رد", "today", current.unanswered ? "alert" : "")}${tile(number(current.overdue), "متابعة متأخرة", "followups", current.overdue ? "alert" : "")}${tile(number(current.unrecorded), "ميعاد عدّى من غير تسجيل حضور", "appointments", current.unrecorded ? "warn" : "")}${tile(period.response === null ? "—" : number(Math.round(period.response)) + " د", "متوسط أول رد في الفترة", "")}</div></section>`;
+  const first = j.steps[0][2];
+  const journeyHtml = `<section class="dash-block"><h2>رحلة العميلات</h2><p class="dash-note">من أول استفسار لحد الحضور، للعميلات اللي وصلوا في الفترة دي.</p><ol class="journey">${j.steps
+    .map(([k, label, n], i) => {
+      const prev = i ? j.steps[i - 1][2] : null;
+      const worst = j.worst && j.worst.key === k;
+      return `<li class="${worst ? "worst" : ""}"><div class="j-top"><strong>${number(n)}</strong><span>${label}</span>${i ? `<em>${percent(n, prev)} من اللي قبلها</em>` : ""}</div><i class="bar" style="width:${first ? Math.max(3, Math.round((n / first) * 100)) : 0}%"></i>${worst ? `<small>أكبر نقطة بنخسر فيها عميلات</small>` : ""}</li>`;
     })
-    .join(
-      "",
-    )}</section></div><section class="panel"><div class="panel-head"><h2>الأداء حسب المصدر</h2></div><div class="table-wrap"><table><thead><tr><th>المصدر</th><th>العميلات</th><th>حجزن</th><th>التحويل</th></tr></thead><tbody>${configs(
-    "source",
-  )
+    .join("")}</ol></section>`;
+  const svcRows = svc.rows
+    .filter((r) => r.inquiries || r.attended || r.upcoming || r.price !== null)
+    .sort((a, b) => (b.revenue || 0) - (a.revenue || 0) || b.inquiries - a.inquiries);
+  const maxSvc = Math.max(1, ...svcRows.map((r) => (svc.total.revenue ? r.revenue || 0 : r.inquiries)));
+  const services = `<section class="dash-block"><div class="dash-head-row"><h2>الخدمات</h2>${admin ? `<button class="text-button" data-page="services">الأسعار</button>` : ""}</div><div class="money-row"><div><span>قيمة الحضور في الفترة</span><strong>${money(svc.total.revenue)}</strong></div><div><span>حجوزات جاية</span><strong>${money(svc.total.pipeline)}</strong></div></div><p class="dash-note">محسوبة من السعر المسجّل لكل خدمة × عدد الحضور، مش من الكاشير.</p>${svc.total.missingPrices ? `<div class="price-warn"><span>${number(svc.total.missingPrices)} خدمة من غير سعر، فقيمتها مش محسوبة.</span>${admin ? `<button data-page="services">أضف الأسعار</button>` : ""}</div>` : ""}<ul class="svc-list">${svcRows
+    .map(
+      (r) =>
+        `<li><div class="svc-top"><strong>${esc(r.label)}</strong><span>${r.price === null ? "من غير سعر" : money(r.price)}</span></div><div class="svc-nums"><span><b>${number(r.inquiries)}</b> استفسار</span><span><b>${number(r.booked)}</b> حجز</span><span><b>${number(r.attended)}</b> حضور</span><span class="svc-val">${money(r.revenue)}</span></div><i class="bar" style="width:${Math.max(3, Math.round(((svc.total.revenue ? r.revenue || 0 : r.inquiries) / maxSvc) * 100))}%"></i></li>`,
+    )
+    .join("") || `<li class="empty">مفيش بيانات خدمات في الفترة دي.</li>`}</ul></section>`;
+  const srcRows = configs("source")
     .map((c) => {
-      const ls = leads.filter((l) => l.source_id === c.id),
-        b = ls.filter((l) => l.first_booked_at).length;
-      return `<tr><td>${esc(c.label)}</td><td>${number(ls.length)}</td><td>${number(b)}</td><td>${percent(b, ls.length)}</td></tr>`;
+      const x = ls.filter((l) => l.source_id === c.id);
+      const b = x.filter((l) => l.first_booked_at).length;
+      return { label: c.label, n: x.length, value: number(x.length), sub: x.length ? `${percent(b, x.length)} حجزوا` : "" };
     })
-    .join("")}</tbody></table></div></section>${
-    me.role === "admin"
-      ? `<section class="panel"><div class="panel-head"><h2>أداء فريق المبيعات</h2></div><div class="table-wrap"><table><thead><tr><th>الموظفة الحالية</th><th>العميلات</th><th>حجزن</th><th>التحويل</th><th>متوسط الرد</th><th>متأخر</th><th>متوسط الجودة</th></tr></thead><tbody>${data.profiles
-          .map((p) => {
-            const ls = leads.filter((l) => l.owner_id === p.id),
-              v = metrics(ls, data.appointments),
-              ids = new Set(ls.map((l) => l.id)),
-              reviews = data.qa.filter(
-                (q) => q.rep_id === p.id && ids.has(q.lead_id),
-              );
-            return `<tr><td>${esc(p.display_name)}</td><td>${number(v.total)}</td><td>${number(v.booked)}</td><td>${percent(v.booked, v.total)}</td><td>${v.response === null ? "—" : number(v.response) + " د"}</td><td>${number(v.overdue)}</td><td>${reviews.length ? number(reviews.reduce((s, q) => s + Number(q.score), 0) / reviews.length) + "٪" : "—"}</td></tr>`;
-          })
-          .join(
-            "",
-          )}</tbody></table></div><p class="panel-note">الإسناد للموظفة الحالية. سجل النشاط يحتفظ بمن نفّذ كل خطوة؛ المؤشرات ليست تقييمًا منفردًا للموظفة.</p></section>`
-      : ""
-  } ${performanceTable(leads, "service_id", configs("service"), "الأداء حسب الخدمة")}<p class="footnote">النسبة بدون بيانات تظهر «—». مؤشرات الحجز والحضور والغياب تحسب عميلات فريدات؛ قد تظهر العميلة في الغياب والحضور بعد إعادة الحجز. المواعيد بدون نتيجة تحسب مواعيد. إعادة الحجز لا تضاعف عدد العميلات اللاتي حجزن.</p>`;
+    .filter((r) => r.n)
+    .sort((a, b) => b.n - a.n);
+  const sources = `<section class="dash-block"><h2>منين بييجوا العميلات</h2><ul class="bar-list">${bars(srcRows, Math.max(1, ...srcRows.map((r) => r.n))) || `<li class="empty">مفيش استفسارات في الفترة دي.</li>`}</ul></section>`;
+  const team = admin
+    ? `<section class="dash-block"><h2>الفريق</h2><ul class="team-list">${data.profiles
+        .filter((p) => p.active)
+        .map((p) => {
+          const mine = ls.filter((l) => l.owner_id === p.id),
+            v = metrics(mine, data.appointments, now),
+            open = metrics(data.leads.filter((l) => l.owner_id === p.id), data.appointments, now);
+          return { p, v, open, n: mine.length };
+        })
+        .sort((a, b) => b.n - a.n)
+        .map(
+          ({ p, v, open }) =>
+            `<li><span class="avatar">${esc(p.display_name.charAt(0))}</span><div><strong>${esc(p.display_name)}</strong><div class="team-nums"><span><b>${number(v.total)}</b> عميلة</span><span><b>${number(v.booked)}</b> حجز</span><span><b>${v.response === null ? "—" : number(Math.round(v.response)) + " د"}</b> أول رد</span><span class="${open.overdue ? "late" : ""}"><b>${number(open.overdue)}</b> متأخر</span></div></div></li>`,
+        )
+        .join("")}</ul><p class="dash-note">الأرقام للتدريب والمتابعة، مش تقييم فردي.</p></section>`
+    : "";
+  const lostRows = configs("lost_reason")
+    .map((c) => {
+      const n = ls.filter((l) => l.stage === "lost" && l.lost_reason_id === c.id).length;
+      return { label: c.label, n, value: number(n) };
+    })
+    .filter((r) => r.n)
+    .sort((a, b) => b.n - a.n);
+  const lost = `<section class="dash-block"><h2>ليه خسرنا عميلات</h2><ul class="bar-list lost">${bars(lostRows, Math.max(1, ...lostRows.map((r) => r.n))) || `<li class="empty">مفيش ملفات اتقفلت في الفترة دي.</li>`}</ul></section>`;
+  return `<div class="dash"><div class="dash-title"><h1>لوحة الإدارة</h1><p>${number(ls.length)} استفسار في ${PERIODS[dashPeriod]}</p></div>${chipsHtml}${attention}${journeyHtml}${services}${sources}${team}${lost}<div class="dash-actions"><button data-act="export">تصدير التقرير</button><button data-act="backup">نسخة كاملة JSON</button></div></div>`;
+}
+function servicesPage() {
+  if (me.role !== "admin")
+    return blank("للإدارة بس", "الأسعار بتتعدل من حساب الإدارة.");
+  const rows = data.config.filter((c) => c.category === "service");
+  return `<div class="dash"><div class="dash-title"><h1>الخدمات والأسعار</h1><p>السعر بيظهر للإدارة في اللوحة بس، ومش بيظهر في ردود الموظفين.</p></div><button class="primary big" data-service-add>${icon("plus")} خدمة جديدة</button><ul class="svc-admin">${rows
+    .map(
+      (c) =>
+        `<li class="${c.active ? "" : "off"}"><div><strong>${esc(c.label)}</strong><span>${servicePrice(c) === null ? "من غير سعر" : money(servicePrice(c))}${c.meta?.price_note ? " · " + esc(c.meta.price_note) : ""}${c.active ? "" : " · موقوفة"}</span></div><button data-service="${esc(c.id)}">تعديل</button></li>`,
+    )
+    .join("")}</ul></div>`;
+}
+function serviceModal(id) {
+  const c = data.config.find((x) => x.id === id && x.category === "service");
+  const price = c ? servicePrice(c) : null;
+  openModal(
+    c ? "تعديل الخدمة" : "خدمة جديدة",
+    field("label", "اسم الخدمة", input("label", "text", c?.label || "", true, 'maxlength="160"')) +
+      field(
+        "price",
+        "السعر بالجنيه",
+        input("price", "number", price === null ? "" : String(price), false, 'min="0" max="10000000" step="1" inputmode="numeric" placeholder="سيبه فاضي لو لسه مش محدد"'),
+      ) +
+      field("price_note", "ملاحظة على السعر (اختياري)", input("price_note", "text", c?.meta?.price_note || "", false, 'maxlength="120" placeholder="مثلاً: للجلسة الواحدة"')) +
+      field("active", "الحالة", select("active", options({ true: "شغالة", false: "موقوفة" }, String(c?.active ?? true)))),
+    (f) => {
+      const raw = String(f.price ?? "").trim();
+      const priceVal = raw === "" ? null : Number(raw);
+      if (priceVal !== null && (!Number.isFinite(priceVal) || priceVal < 0))
+        throw Error("السعر لازم يكون رقم");
+      return rpc("save_configuration", {
+        p: {
+          id: c?.id || "service_" + Date.now().toString(36),
+          category: "service",
+          label: f.label,
+          body: c?.body || "",
+          active: f.active === "true",
+          meta: { price: priceVal, price_note: (f.price_note || "").trim() },
+        },
+      });
+    },
+  );
+}
+function bindDash() {
+  document.querySelectorAll("[data-dash-period]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        dashPeriod = b.dataset.dashPeriod;
+        render();
+      }),
+  );
+  document.querySelectorAll("[data-service]").forEach(
+    (b) => (b.onclick = () => serviceModal(b.dataset.service)),
+  );
+  document.querySelectorAll("[data-service-add]").forEach(
+    (b) => (b.onclick = () => serviceModal(null)),
+  );
 }
 function scripts() {
   return `${heading("محادثات بفهم واهتمام", "دليل التواصل", "قوالب مساعدة. عدّلي التفاصيل حسب كلام العميلة واستخدمي معلومات المركز المعتمدة فقط.")}<div class="notice subtle">لا تشخيص طبي، لا ضمان نتائج، ولا أسعار أو خصومات غير معتمدة. اختيارات المواعيد تُعرض بعد مراجعة الإتاحة.</div><h2 class="section-title">قوالب المحادثة</h2><div class="script-grid">${configs(
@@ -1657,6 +1752,7 @@ function go(target) {
 let checkTimer;
 function bind() {
   bindFlow();
+  bindDash();
   document.querySelectorAll("details[data-fold]").forEach((d) =>
     d.addEventListener("toggle", () => {
       d.open ? folds.add(d.dataset.fold) : folds.delete(d.dataset.fold);
