@@ -194,13 +194,13 @@ test("V0.2 migration, shared team, complete lifecycle, notes and rejected operat
   assert.equal((await pg.query("select * from leads")).rows.length, 0);
   await assert.rejects(add("EXPIRED"), /مصرح/);
   await actor(outsider);
-  await assert.rejects(rpc("join_qa_workspace", {}), /انتهت فترة/);
+  await assert.rejects(rpc("join_qa_workspace", { p_person: "سارة" }), /انتهت فترة/);
   await pg.exec("reset role");
   await pg.exec(
     `insert into configuration(id,category,label,meta)values('setting_qa_open_access','setting','QA',jsonb_build_object('qa_only',true,'enabled_until',now()+interval '1 hour'));`,
   );
   await actor(outsider);
-  await rpc("join_qa_workspace", {});
+  await rpc("join_qa_workspace", { p_person: "سارة" });
   const joined = (
     await pg.query("select * from profiles where id=$1", [outsider])
   ).rows[0];
@@ -219,8 +219,8 @@ test("V0.2 migration, shared team, complete lifecycle, notes and rejected operat
     `update configuration set meta=jsonb_build_object('qa_only',true,'enabled_until',now()-interval '1 second') where id='setting_qa_open_access';`,
   );
   await actor(outsider);
-  await assert.rejects(rpc("join_qa_workspace", {}), /انتهت فترة/);
+  await assert.rejects(rpc("join_qa_workspace", { p_person: "سارة" }), /انتهت فترة/);
   await pg.exec("set role anon");
-  await assert.rejects(rpc("join_qa_workspace", {}), /permission denied/);
+  await assert.rejects(rpc("join_qa_workspace", { p_person: "سارة" }), /permission denied/);
   await pg.close();
 });

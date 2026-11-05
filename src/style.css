@@ -2950,3 +2950,10 @@ textarea {
 .more-item.switch-row{grid-template-columns:1fr auto}
 .content{padding-bottom:104px}
 @media (min-width:900px){.content{padding-bottom:24px}}
+
+/* persona picker */
+.persona-list{display:grid;gap:10px;margin:16px 0}
+.persona{display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 14px;border:1px solid #d9c8e6;border-radius:16px;background:#fff;text-align:start;font:inherit;cursor:pointer;width:100%}
+.persona strong{display:block;color:#2f1b41;font-size:17px}
+.persona small{color:#6b5a78}
+.persona:hover,.persona:focus-visible{border-color:#c2336f;background:#fcf6f8}

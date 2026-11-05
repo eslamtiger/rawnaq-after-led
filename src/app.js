@@ -243,16 +243,50 @@ function login() {
       }
     });
 }
+const PERSONAS = [
+  ["سارة", "موظفة مبيعات"],
+  ["أحمد", "موظف مبيعات"],
+  ["منى", "موظفة مبيعات"],
+  ["كريم", "موظف مبيعات"],
+  ["مديرة المركز", "إدارة — كل الصلاحيات"],
+];
+function qaPersona() {
+  try {
+    return sessionStorage.getItem("rawnaq-persona") || "";
+  } catch {
+    return "";
+  }
+}
+function personaPicker() {
+  root.innerHTML = `<main class="auth"><section class="auth-story"><div class="brand-logo"><img src="/brand/rawnaq-logo.png" alt="عيادات رونق للجلدية والتجميل والليزر" width="140" height="208"></div><div><div class="eyebrow">نسخة تجريبية</div><h1>جرّبي النظام<br>زي يوم شغل حقيقي.</h1><p>اختاري اسمك وادخلي على طول. من غير كلمة سر.</p></div><small>بيانات تجريبية فقط</small></section><section class="auth-form"><div class="auth-box"><span class="eyebrow">أهلًا بيكي في رونق</span><h2>مين بتستخدمي النظام دلوقتي؟</h2><div class="persona-list">${PERSONAS.map(([n, r]) => `<button class="persona" data-persona="${esc(n)}"><span class="avatar">${esc(n.charAt(0))}</span><span><strong>${esc(n)}</strong><small>${esc(r)}</small></span></button>`).join("")}</div><div class="auth-note">الدخول التجريبي مؤقت، والبيانات هنا مش لعميلات حقيقيات.</div></div></section></main>`;
+  root.querySelectorAll("[data-persona]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        try {
+          sessionStorage.setItem("rawnaq-persona", b.dataset.persona);
+        } catch {}
+        root.innerHTML = '<main class="access"><p>جاري فتح مساحة رونق…</p></main>';
+        refresh();
+      }),
+  );
+}
 async function refresh() {
   if (loading) return;
   loading = true;
   try {
     data = await loadWorkspace();
     me = data.profiles.find((p) => p.id === session.user.id && p.active);
-    if (!me && qaAnonymous) {
-      await rpc("join_qa_workspace");
-      data = await loadWorkspace();
-      me = data.profiles.find((p) => p.id === session.user.id && p.active);
+    if (qaAnonymous && session.user.is_anonymous) {
+      const persona = qaPersona();
+      if (!persona) {
+        personaPicker();
+        return;
+      }
+      if (!me || me.display_name !== persona) {
+        await rpc("join_qa_workspace", { p_person: persona });
+        data = await loadWorkspace();
+        me = data.profiles.find((p) => p.id === session.user.id && p.active);
+      }
     }
     if (!me) {
       root.innerHTML = `<main class="access">${blank("الحساب يحتاج تصريح من الإدارة", "تم تسجيل الدخول، لكن الحساب غير مضاف لفريق رونق أو تم إيقافه. معرّف طلب التصريح: " + esc(session.user.id), '<button data-act="logout">تسجيل الخروج</button>')}</main>`;
@@ -269,7 +303,7 @@ async function refresh() {
 }
 function render() {
   indexData();
-  root.innerHTML = `<div class="workspace"><aside class="sidebar"><a class="brand-logo" href="#today" aria-label="عيادات رونق — الرئيسية"><img src="/brand/rawnaq-logo.png" alt="عيادات رونق للجلدية والتجميل والليزر" width="140" height="208"></a><div class="sidebar-caption">متابعة العميلات</div><nav aria-label="التنقل الرئيسي">${nav.map(([id, title, i]) => `<button data-page="${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><span class="avatar">${esc(me.display_name.charAt(0))}</span><div><strong>${esc(me.display_name)}</strong><small>${me.role === "admin" ? "إدارة المركز" : "موظفة المبيعات"}</small></div><button class="icon-button" data-act="logout" aria-label="تسجيل الخروج">${icon("logout")}</button></div></aside><div class="main"><header class="topbar"><div class="breadcrumb">رونق <span>/</span> ${nav.find((n) => n[0] === page)?.[1] ?? "المزيد"}</div><div class="top-actions"><span class="connection"><i></i> متصل</span><button class="icon-button" data-act="refresh" aria-label="تحديث البيانات">${icon("refresh")}</button></div></header><main class="content">${selected ? profileView() : pageView()}</main><footer>توقيت القاهرة · ${session.user.is_anonymous ? "اختبار QA مؤقت — بيانات وهمية فقط · " : ""}البيانات حسب صلاحيات حسابك <span>رونق — متابعة باهتمام</span></footer></div>${!selected && ["today", "leads", "followups"].includes(page) ? `<button class="fab" data-act="add" aria-label="تسجيل عميلة جديدة">${icon("plus")}<span>عميلة جديدة</span></button>` : ""}<nav class="bottom-nav" aria-label="التنقل السفلي">${bottomNav.map(([id, title, i]) => `<button data-page="${id}" class="${page === id || (id === "more" && ["followups", "appointments", "dashboard", "scripts", "qa", "settings"].includes(page)) ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" && queue(data.leads).length ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav></div><dialog id="modal" aria-labelledby="modal-title"></dialog>`;
+  root.innerHTML = `<div class="workspace"><aside class="sidebar"><a class="brand-logo" href="#today" aria-label="عيادات رونق — الرئيسية"><img src="/brand/rawnaq-logo.png" alt="عيادات رونق للجلدية والتجميل والليزر" width="140" height="208"></a><div class="sidebar-caption">متابعة العميلات</div><nav aria-label="التنقل الرئيسي">${nav.map(([id, title, i]) => `<button data-page="${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><span class="avatar">${esc(me.display_name.charAt(0))}</span><div><strong>${esc(me.display_name)}</strong><small>${me.role === "admin" ? "إدارة المركز" : "موظفة المبيعات"}</small></div><button class="icon-button" data-act="logout" aria-label="${qaAnonymous ? "تغيير الشخص" : "تسجيل الخروج"}">${icon("logout")}</button></div></aside><div class="main"><header class="topbar"><div class="breadcrumb">رونق <span>/</span> ${nav.find((n) => n[0] === page)?.[1] ?? "المزيد"}</div><div class="top-actions"><span class="connection"><i></i> متصل</span><button class="icon-button" data-act="refresh" aria-label="تحديث البيانات">${icon("refresh")}</button></div></header><main class="content">${selected ? profileView() : pageView()}</main><footer>توقيت القاهرة · ${session.user.is_anonymous ? "اختبار QA مؤقت — بيانات وهمية فقط · " : ""}البيانات حسب صلاحيات حسابك <span>رونق — متابعة باهتمام</span></footer></div>${!selected && ["today", "leads", "followups"].includes(page) ? `<button class="fab" data-act="add" aria-label="تسجيل عميلة جديدة">${icon("plus")}<span>عميلة جديدة</span></button>` : ""}<nav class="bottom-nav" aria-label="التنقل السفلي">${bottomNav.map(([id, title, i]) => `<button data-page="${id}" class="${page === id || (id === "more" && ["followups", "appointments", "dashboard", "scripts", "qa", "settings"].includes(page)) ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(i)}<span>${title}</span>${id === "today" && queue(data.leads).length ? `<b>${number(queue(data.leads).length)}</b>` : ""}</button>`).join("")}</nav></div><dialog id="modal" aria-labelledby="modal-title"></dialog>`;
   bind();
 }
 function heading(k, title, sub, action = "") {
@@ -299,7 +333,7 @@ function morePage() {
     ["qa", "الجودة والتدريب", "مراجعات التواصل ومعايير الجودة", "check"],
     ["settings", "الإعدادات", "المصادر والقوالب وفريق العمل", "settings"],
   ];
-  return `${heading("كل الأقسام", "المزيد", "باقي أقسام رونق.")}<section class="panel more-list">${items.map(([id, t, s, i]) => `<button class="more-item" data-page="${id}">${icon(i)}<span><strong>${t}</strong><small>${s}</small></span>${icon("arrow")}</button>`).join("")}<label class="more-item switch-row"><span><strong>وضع التدريب</strong><small>يظهر سبب كل رد وخطوة. للموظفة الجديدة</small></span><input type="checkbox" data-training ${training ? "checked" : ""}></label><button class="more-item" data-act="logout">${icon("logout")}<span><strong>تسجيل الخروج</strong><small>${esc(me.display_name)}</small></span></button></section>`;
+  return `${heading("كل الأقسام", "المزيد", "باقي أقسام رونق.")}<section class="panel more-list">${items.map(([id, t, s, i]) => `<button class="more-item" data-page="${id}">${icon(i)}<span><strong>${t}</strong><small>${s}</small></span>${icon("arrow")}</button>`).join("")}<label class="more-item switch-row"><span><strong>وضع التدريب</strong><small>يظهر سبب كل رد وخطوة. للموظفة الجديدة</small></span><input type="checkbox" data-training ${training ? "checked" : ""}></label><button class="more-item" data-act="logout">${icon("logout")}<span><strong>${qaAnonymous ? "تغيير الشخص" : "تسجيل الخروج"}</strong><small>${esc(me.display_name)}</small></span></button></section>`;
 }
 function byUrgency(now) {
   return (a, b) =>
@@ -1511,6 +1545,14 @@ function bind() {
         try {
           switch (b.dataset.act) {
             case "logout": {
+              if (qaAnonymous && session?.user?.is_anonymous) {
+                try {
+                  sessionStorage.removeItem("rawnaq-persona");
+                } catch {}
+                selected = null;
+                personaPicker();
+                return;
+              }
               const { error } = await db.auth.signOut();
               if (error) throw error;
               data = {

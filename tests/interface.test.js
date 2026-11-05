@@ -81,7 +81,7 @@ test("Arabic interface: navigation, empty data, profile and validated save forms
       if (name === "join_qa_workspace") {
         fixture.profiles.push({
           id: own,
-          display_name: "تجربة رونق",
+          display_name: args?.p_person || "تجربة رونق",
           role: "rep",
           active: true,
         });
@@ -180,7 +180,15 @@ test("Arabic interface: navigation, empty data, profile and validated save forms
   authHandler("SIGNED_IN", { user: { id: own, is_anonymous: true } });
   await tick();
   await tick();
-  assert.ok(calls.some(([name]) => name === "join_qa_workspace"));
+  assert.ok(w.document.querySelector("[data-persona]"));
+  w.document.querySelector('[data-persona="سارة"]').click();
+  await tick();
+  await tick();
+  assert.ok(
+    calls.some(
+      ([name, args]) => name === "join_qa_workspace" && args.p_person === "سارة",
+    ),
+  );
   assert.ok(w.document.querySelector("aside.sidebar"));
   assert.ok(!w.document.body.textContent.includes("الحساب يحتاج تصريح"));
   await w.happyDOM.close();
